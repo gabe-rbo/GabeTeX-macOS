@@ -1,8 +1,12 @@
 <p align="center">
-  <img src="docs/assets/icon.png" width="128" height="128" alt="GabeTeX app icon">
+  <img src="Support/Screenshots/icon.png" width="128" height="128" alt="GabeTeX app icon">
 </p>
 
-<h1 align="center">GabeTeX</h1>
+<h1 align="center">GabeTeX for macOS</h1>
+
+<p align="center">
+  <i>Part of the GabeTeX project: see <a href="https://github.com/gabe-rbo/GabeTeX">https://github.com/gabe-rbo/GabeTeX</a> and the website <a href="https://gabe-rbo.github.io/GabeTeX">https://gabe-rbo.github.io/GabeTeX</a>.</i>
+</p>
 
 <p align="center">
   <b>A native macOS LaTeX editor for projects, not just files.</b><br>
@@ -10,27 +14,28 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/gabe-rbo/GabeTeX/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/gabe-rbo/GabeTeX?display_name=tag&sort=semver"></a>
+  <a href="https://github.com/gabe-rbo/GabeTeX-macOS/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/gabe-rbo/GabeTeX-macOS?display_name=tag&sort=semver"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
   <img alt="Platform: macOS 26+" src="https://img.shields.io/badge/platform-macOS%2026%2B-lightgrey?logo=apple&logoColor=white">
   <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white">
-  <a href="https://github.com/gabe-rbo/GabeTeX/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/gabe-rbo/GabeTeX/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/gabe-rbo/GabeTeX-macOS/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/gabe-rbo/GabeTeX-macOS/actions/workflows/ci.yml/badge.svg"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/gabe-rbo/GabeTeX/releases/latest/download/GabeTeX.dmg"><img alt="Download GabeTeX for Mac" src="https://img.shields.io/badge/Download%20for%20Mac-GabeTeX.dmg-0A84FF?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="https://github.com/gabe-rbo/GabeTeX-macOS/releases/latest/download/GabeTeX.dmg"><img alt="Download GabeTeX for Mac" src="https://img.shields.io/badge/Download%20for%20Mac-GabeTeX.dmg-0A84FF?style=for-the-badge&logo=apple&logoColor=white"></a>
 </p>
 
 <p align="center">
   <a href="https://gabe-rbo.github.io/GabeTeX/">Website</a> ·
-  <a href="https://github.com/gabe-rbo/GabeTeX/releases">All releases</a> ·
+  <a href="https://github.com/gabe-rbo/GabeTeX">GabeTeX project</a> ·
+  <a href="https://github.com/gabe-rbo/GabeTeX-macOS/releases">All releases</a> ·
   <a href="CHANGELOG.md">Changelog</a> ·
   <a href="CONTRIBUTING.md">Contributing</a> ·
   <a href="README.pt-BR.md">Português (Brasil)</a>
 </p>
 
 <p align="center">
-  <img src="docs/assets/screenshots/project.png" width="900" alt="A GabeTeX project window: file sidebar, LaTeX editor and the live PDF preview side by side">
+  <img src="Support/Screenshots/project.png" width="900" alt="A GabeTeX project window: file sidebar, LaTeX editor and the live PDF preview side by side">
 </p>
 
 ---
@@ -83,7 +88,7 @@ wanted an editor that treats that as the normal case. It has three goals:
   any time. Reloads, sync and the build shortcuts all keep working.
 
 <p align="center">
-  <img src="docs/assets/screenshots/sync.png" width="800" alt="Jumping between the PDF and the source: the target word is highlighted briefly">
+  <img src="Support/Screenshots/sync.png" width="800" alt="Jumping between the PDF and the source: the target word is highlighted briefly">
 </p>
 
 ### Presenting
@@ -112,13 +117,28 @@ wanted an editor that treats that as the normal case. It has three goals:
   the recents list. Labels live in the app and never touch your project folders.
 
 <p align="center">
-  <img src="docs/assets/screenshots/welcome.png" width="640" alt="The Welcome window with recent projects and color labels">
+  <img src="Support/Screenshots/welcome.png" width="640" alt="The Welcome window with recent projects and color labels">
 </p>
 
 ### Touch Bar
 - **Touch Bar support** on Macs that have one: compile and stop, Show in PDF, shortcuts for math and for sections
   and environments, scrubbers for Greek letters and math symbols, and page and zoom controls when the PDF has focus.
   Customize it under **View › Customize Touch Bar…**.
+
+## Repository layout
+
+```text
+Package.swift   SwiftPM manifest (no third-party dependencies)
+Sources/        the app and its modules (TeXCore, TeXToolchain, EditorKit, VimKit, PreviewKit, GabeTeX)
+Tests/          check executables and fixtures
+Resources/      en and pt-BR localizations
+Support/        Info.plist, AppIcon.icns, DMG assets, Screenshots/ used by this README
+Scripts/        build-app.sh, make-dmg.sh, release.sh and other tooling
+Examples/       a small multi-file sample project (Homologia)
+.github/        CI workflow and issue / PR templates
+```
+
+The Linux and Windows editions live in their own repositories; see the [GabeTeX project](https://github.com/gabe-rbo/GabeTeX).
 
 ## Requirements
 
@@ -128,9 +148,9 @@ wanted an editor that treats that as the normal case. It has three goals:
 
 ## Installation
 
-1. **[Download GabeTeX.dmg](https://github.com/gabe-rbo/GabeTeX/releases/latest/download/GabeTeX.dmg)**. The
-   link always points to the newest release. The [website](https://gabe-rbo.github.io/GabeTeX/) lists **all
-   versions**, with release notes and a download link for each, and updates itself as new releases are published.
+1. **[Download GabeTeX.dmg](https://github.com/gabe-rbo/GabeTeX-macOS/releases/latest/download/GabeTeX.dmg)**. The
+   link always points to the newest release. The [Releases page](https://github.com/gabe-rbo/GabeTeX-macOS/releases) lists **all
+   versions**, with release notes and a download link for each (the [website](https://gabe-rbo.github.io/GabeTeX/) mirrors it).
 2. Open the disk image and drag **GabeTeX** onto the **Applications** folder.
 3. Install a TeX distribution if you do not have one yet ([MacTeX](https://tug.org/mactex/)).
 
@@ -268,7 +288,7 @@ If it still fails, reinstall your TeX distribution, or switch to `\usepackage[ba
 **Something looks stale.** The shadow copy is only a cache. Quit GabeTeX and delete
 `~/Library/Caches/io.github.gabe-rbo.GabeTeX/Shadow/`; it is rebuilt on the next compile.
 
-**Found a bug?** Please [open an issue](https://github.com/gabe-rbo/GabeTeX/issues) and attach the LaTeX log (the
+**Found a bug?** Please [open an issue](https://github.com/gabe-rbo/GabeTeX-macOS/issues) and attach the LaTeX log (the
 **Log** tab of the Issues panel) and, if you can, a minimal project that reproduces it. See
 [CONTRIBUTING.md](CONTRIBUTING.md#reporting-bugs).
 
@@ -288,8 +308,8 @@ You only need the **Command Line Tools** (`xcode-select --install`). Full Xcode 
 a plain Swift package with no third-party dependencies.
 
 ```sh
-git clone https://github.com/gabe-rbo/GabeTeX.git
-cd GabeTeX
+git clone https://github.com/gabe-rbo/GabeTeX-macOS.git
+cd GabeTeX-macOS
 
 swift build                      # debug build of every module
 swift run GabeTeX                # run without packaging

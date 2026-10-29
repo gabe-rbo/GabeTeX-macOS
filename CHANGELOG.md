@@ -100,5 +100,5 @@ The first public release.
 
 - User interface in English and Brazilian Portuguese, following the system language.
 
-[Unreleased]: https://github.com/gabe-rbo/GabeTeX/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/gabe-rbo/GabeTeX/releases/tag/v1.0.0
+[Unreleased]: https://github.com/gabe-rbo/GabeTeX-macOS/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/gabe-rbo/GabeTeX-macOS/releases/tag/v1.0.0

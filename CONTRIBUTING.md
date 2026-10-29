@@ -30,8 +30,8 @@ You need:
   end-to-end toolchain checks.
 
 ```sh
-git clone https://github.com/gabe-rbo/GabeTeX.git
-cd GabeTeX
+git clone https://github.com/gabe-rbo/GabeTeX-macOS.git
+cd GabeTeX-macOS
 swift build
 ```
 
@@ -89,7 +89,7 @@ Support/                   Info.plist, AppIcon.icns
 Scripts/                   build-app.sh, make-icon.swift and the release tooling
 Examples/Homologia/        a small multi-file sample project
 Tests/Fixtures/TeXToolchain/   real TeX logs and tiny projects used by the parser checks
-docs/                      the project website (GitHub Pages)
+Support/Screenshots/       images used by the READMEs
 ```
 
 [ARCHITECTURE.md](ARCHITECTURE.md) explains how the modules fit together and the reasoning behind the
@@ -157,7 +157,7 @@ committing regenerated logs, replace anything personal (such as `/Users/<your-na
 
 ## Reporting bugs
 
-Open an [issue](https://github.com/gabe-rbo/GabeTeX/issues) and include as much of this as you can:
+Open an [issue](https://github.com/gabe-rbo/GabeTeX-macOS/issues) and include as much of this as you can:
 
 - **What you did, what you expected, what happened.** Screenshots or a short screen recording help.
 - **Versions:** GabeTeX (**GabeTeX › About GabeTeX**), macOS, and your TeX distribution (**Settings › TeX** shows

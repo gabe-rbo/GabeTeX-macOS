@@ -13,7 +13,7 @@
 # This script never publishes, uploads, tags, commits or installs anything. Attaching dist/GabeTeX.dmg to a
 # GitHub release is a separate, manual step. The app is ad-hoc signed and NOT notarized (no Developer ID).
 # The DMG file name carries no version on purpose: the stable URL
-# https://github.com/gabe-rbo/GabeTeX/releases/latest/download/GabeTeX.dmg keeps working for every release.
+# https://github.com/gabe-rbo/GabeTeX-macOS/releases/latest/download/GabeTeX.dmg keeps working for every release.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

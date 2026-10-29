@@ -2,13 +2,13 @@
 
 ## Supported versions
 
-Only the latest release of GabeTeX receives security fixes. Before you report a problem, please check that it happens on the [latest release](https://github.com/gabe-rbo/GabeTeX/releases/latest). All releases are listed on the [Releases page](https://github.com/gabe-rbo/GabeTeX/releases).
+Only the latest release of GabeTeX receives security fixes. Before you report a problem, please check that it happens on the [latest release](https://github.com/gabe-rbo/GabeTeX-macOS/releases/latest). All releases are listed on the [Releases page](https://github.com/gabe-rbo/GabeTeX-macOS/releases).
 
 ## Reporting a vulnerability
 
 Please do not report security problems in public issues, pull requests or discussions. Report them privately instead:
 
-1. Open the [Security tab](https://github.com/gabe-rbo/GabeTeX/security) of the repository.
+1. Open the [Security tab](https://github.com/gabe-rbo/GabeTeX-macOS/security) of the repository.
 2. Click **Report a vulnerability** and fill in the form.
 
 This uses GitHub's private vulnerability reporting, so only the maintainer can read your report until a fix is ready.
