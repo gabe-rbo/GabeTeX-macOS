@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch / pull request supersedes the run that is still going.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-check:
+    name: Build and checks (macOS 26)
+    runs-on: macos-26
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # GabeTeX targets macOS 26 and builds with Swift 6.2 or newer, so use the newest *stable* Xcode on the
+      # image (skipping betas and release candidates) and fall back to the newest of any kind.
+      - name: Select the newest installed Xcode
+        run: |
+          set -euo pipefail
+          echo "Installed Xcode versions:"
+          ls -d /Applications/Xcode*.app || true
+
+          pick() {
+            for app in /Applications/Xcode*.app; do
+              [ -d "$app" ] || continue
+              if [ "${1:-}" = "stable" ]; then
+                case "$app" in *[Bb]eta*|*_RC*|*[Rr]elease_[Cc]andidate*) continue ;; esac
+              fi
+              version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+                "$app/Contents/Info.plist" 2>/dev/null || echo 0)
+              echo "$version $app"
+            done | sort -V | tail -n 1
+          }
+
+          best=$(pick stable)
+          [ -n "$best" ] || best=$(pick any)
+          [ -n "$best" ] || { echo "::error::No Xcode found in /Applications"; exit 1; }
+
+          xcode_version=${best%% *}
+          xcode_app=${best#* }
+          echo "Selecting $xcode_app (Xcode $xcode_version)"
+          sudo xcode-select -s "$xcode_app/Contents/Developer"
+          echo "XCODE_VERSION=$xcode_version" >> "$GITHUB_ENV"
+
+      - name: Toolchain versions
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Cache SwiftPM build products
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-xcode${{ env.XCODE_VERSION }}-${{ hashFiles('Package.swift', 'Sources/**') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-xcode${{ env.XCODE_VERSION }}-
+
+      - name: Build
+        run: swift build
+
+      # The check executables replace XCTest, which is not available without a full Xcode.
+      - name: TeXCoreChecks
+        run: swift run TeXCoreChecks
+
+      - name: VimKitChecks
+        run: swift run VimKitChecks
+
+      - name: EditorKitChecks
+        run: swift run EditorKitChecks
+
+      # Without --unit, TeXToolchainChecks also compiles real documents and expects MacTeX in
+      # /Library/TeX/texbin, which the runner image does not have. --unit runs every suite that needs no TeX
+      # installation: the log parser against the real-log fixtures, the shadow workspace, the process runner.
+      # Run the full set (including the end-to-end compiles) locally with `swift run TeXToolchainChecks`.
+      - name: TeXToolchainChecks (suites that need no TeX installation)
+        run: swift run TeXToolchainChecks --unit

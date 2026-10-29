@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest an idea or an improvement for GabeTeX.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an idea. Please search the existing issues first, in case it is already planned.
+        Issues in Portuguese are welcome too. Pode escrever em português.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation and what gets in the way. The problem matters more than the specific fix.
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed solution
+      description: What would you like GabeTeX to do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you have considered
+      description: Other tools, workarounds or settings you have tried.
+  - type: textarea
+    id: current-workflow
+    attributes:
+      label: How do you write LaTeX today? (optional)
+      description: Your editor, your TeX setup and the kind of documents you work on. This helps us understand the use case.

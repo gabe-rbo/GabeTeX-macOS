@@ -1,0 +1,14 @@
+.build/
+build/
+dist/
+.swiftpm/
+.DS_Store
+*.xcodeproj
+xcuserdata/
+
+# Maintainer-local tooling and notes (not part of the project)
+claude/
+.agentwork/
+.bg/
+Scripts/bg.sh
+Scripts/sync-plan.py
