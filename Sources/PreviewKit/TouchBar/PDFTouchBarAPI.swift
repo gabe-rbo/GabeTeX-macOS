@@ -225,19 +225,22 @@ enum PDFWordScan {
     /// The character nearest to `point` (page space), searching outwards (lines first, then along the line).
     static func nearestCharacter(on page: PDFPage, to point: CGPoint, length: Int) -> (point: CGPoint, index: Int)? {
         guard length > 0 else { return nil }
+        let text = (page.string ?? "") as NSString
         let verticalSteps: [CGFloat] = [0] + (1...12).flatMap { [CGFloat($0) * -7, CGFloat($0) * 7] }
         let horizontalSteps: [CGFloat] = [0, -30, 30, -80, 80, -160, 160]
         for dx in horizontalSteps {
             for dy in verticalSteps {
                 let candidate = CGPoint(x: point.x + dx, y: point.y + dy)
                 let index = page.characterIndex(at: candidate)
-                if index >= 0, index < length { return (candidate, index) }
+                // Only a word character counts: the point may sit on the space between two words.
+                if index >= 0, index < length, PDFWordScan.isWordCharacter(at: index, in: text) {
+                    return (candidate, index)
+                }
             }
         }
         // Nothing close to the point (e.g. the visible centre lies in a margin of a zoomed-out page): take the
         // word character whose bounds are nearest on the whole page. This runs only on an explicit tap, so a
         // linear scan (bounded for very long pages) is fine.
-        let text = (page.string ?? "") as NSString
         var best: (distance: CGFloat, point: CGPoint, index: Int)?
         for index in 0..<min(length, text.length, 50_000) where PDFWordScan.isWordCharacter(at: index, in: text) {
             let bounds = page.characterBounds(at: index)
