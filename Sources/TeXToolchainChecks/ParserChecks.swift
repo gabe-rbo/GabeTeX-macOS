@@ -190,7 +190,9 @@ func parserChecks() async {
         var result: [Diagnostic] = []
         let seconds = measure { result = TeXLogParser.parse(log: big, mapPath: mapper) }
         print("    1 MB log (\(big.utf8.count) bytes) parsed in \(Int(seconds * 1000)) ms, \(result.count) diagnostics")
-        Check.expect(seconds < 0.2, "parse took \(Int(seconds * 1000)) ms")
+        // The budget is for a developer Mac; shared CI virtual machines are slower and noisier.
+        let budget = ProcessInfo.processInfo.environment["CI"] == "true" ? 0.6 : 0.2
+        Check.expect(seconds < budget, "parse took \(Int(seconds * 1000)) ms (budget \(Int(budget * 1000)) ms)")
         Check.equal(result.count, 14, "duplicates across repeated runs collapse")
     }
 }

@@ -14,6 +14,7 @@
   <a href="LICENSE"><img alt="Licença: MIT" src="https://img.shields.io/badge/licen%C3%A7a-MIT-blue"></a>
   <img alt="Plataforma: macOS 26+" src="https://img.shields.io/badge/plataforma-macOS%2026%2B-lightgrey?logo=apple&logoColor=white">
   <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white">
+  <a href="https://github.com/gabe-rbo/GabeTeX/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/gabe-rbo/GabeTeX/actions/workflows/ci.yml/badge.svg"></a>
 </p>
 
 <p align="center">
