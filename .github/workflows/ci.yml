@@ -64,9 +64,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .build
-          key: ${{ runner.os }}-spm-xcode${{ env.XCODE_VERSION }}-${{ hashFiles('Package.swift', 'Sources/**') }}
+          # SwiftPM bakes absolute paths into .build, so the key carries the repository and the checkout path;
+          # restore-keys stay within the same repository, path and Xcode version.
+          key: ${{ runner.os }}-spm-${{ github.repository }}-${{ hashFiles('Package.swift', 'Package.resolved') }}-xcode${{ env.XCODE_VERSION }}-${{ github.workspace }}-${{ hashFiles('Sources/**') }}
           restore-keys: |
-            ${{ runner.os }}-spm-xcode${{ env.XCODE_VERSION }}-
+            ${{ runner.os }}-spm-${{ github.repository }}-${{ hashFiles('Package.swift', 'Package.resolved') }}-xcode${{ env.XCODE_VERSION }}-${{ github.workspace }}-
 
       - name: Build
         run: swift build
