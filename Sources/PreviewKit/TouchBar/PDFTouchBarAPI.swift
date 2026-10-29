@@ -234,6 +234,21 @@ enum PDFWordScan {
                 if index >= 0, index < length { return (candidate, index) }
             }
         }
-        return nil
+        // Nothing close to the point (e.g. the visible centre lies in a margin of a zoomed-out page): take the
+        // word character whose bounds are nearest on the whole page. This runs only on an explicit tap, so a
+        // linear scan (bounded for very long pages) is fine.
+        let text = (page.string ?? "") as NSString
+        var best: (distance: CGFloat, point: CGPoint, index: Int)?
+        for index in 0..<min(length, text.length, 50_000) where PDFWordScan.isWordCharacter(at: index, in: text) {
+            let bounds = page.characterBounds(at: index)
+            guard bounds.width > 0, bounds.height > 0 else { continue }
+            let dx = max(bounds.minX - point.x, 0, point.x - bounds.maxX)
+            let dy = max(bounds.minY - point.y, 0, point.y - bounds.maxY)
+            let distance = dx * dx + dy * dy
+            if distance < (best?.distance ?? .infinity) {
+                best = (distance, CGPoint(x: bounds.midX, y: bounds.midY), index)
+            }
+        }
+        return best.map { ($0.point, $0.index) }
     }
 }
