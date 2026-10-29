@@ -18,6 +18,30 @@ public struct ProjectIndex: Hashable, Sendable {
     /// Magic comments of the root file.
     public var magicComments: MagicComments
 
+    // MARK: Reference & citation tracking (input of `ReferenceLinter`)
+
+    /// Every `\label{key}` with the exact range of its key, in file order. Nothing is deduplicated, so
+    /// duplicate definitions stay visible. (`labels` is the same list without columns.)
+    public var labelSites: [KeyOccurrence]
+    /// Labels defined through a `label=key` option or `\newlabel` (see `ReferenceScan.optionLabels`).
+    public var optionLabels: [KeyOccurrence]
+    /// Every key of `\ref \eqref \pageref \autoref \nameref \vref \cref \Cref \cpageref \labelcref \crefrange …`
+    /// (comma lists split, both keys of ranges), in file order.
+    public var referenceUses: [KeyOccurrence]
+    /// Every key of `\cite \citep \citet \parencite \textcite \autocite \footcite \nocite …`, in file order.
+    public var citationUses: [KeyOccurrence]
+    /// Every `\bibitem[label]{key}`.
+    public var bibItems: [KeyOccurrence]
+    /// Prefixes of label keys that macros build at run time (`\label{sec:#1}` → `"sec:"`), sorted and unique.
+    public var dynamicLabelPrefixes: [String]
+    /// The project uses `xr` / `xr-hyper` / `\externaldocument`: labels may be defined in another document.
+    public var usesExternalDocuments: Bool
+    /// The project uses `\externalcitedocument` (xcite): citations may be defined in another document.
+    public var usesExternalCitations: Bool
+    /// A `\bibliography` / `\addbibresource` file could not be found or read, or is not a `.bib` file, so the
+    /// set of citation keys is not fully known.
+    public var hasUnknownBibliographySource: Bool
+
     public init(rootFile: URL) {
         self.rootFile = rootFile
         self.files = [rootFile]
@@ -29,6 +53,15 @@ public struct ProjectIndex: Hashable, Sendable {
         self.customCommands = []
         self.customEnvironments = []
         self.magicComments = MagicComments()
+        self.labelSites = []
+        self.optionLabels = []
+        self.referenceUses = []
+        self.citationUses = []
+        self.bibItems = []
+        self.dynamicLabelPrefixes = []
+        self.usesExternalDocuments = false
+        self.usesExternalCitations = false
+        self.hasUnknownBibliographySource = false
     }
 
     /// Symbols for completion. `projectFiles` = all files under the project directory (relative to the root file's dir).
@@ -143,6 +176,9 @@ public struct ProjectIndex: Hashable, Sendable {
         var bibFiles: [URL] = []
         var seenBib = Set<URL>()
         var seenLocalPackages = Set<URL>()
+        var references = ReferenceScan()
+        var dynamicPrefixes = Set<String>()
+        var unknownBibliography = false
 
         func absorbDefinitions(_ scan: LaTeXScanner.FileScan) {
             for item in scan.customCommands where seenCommands.insert(item.label).inserted { commands.append(item) }
@@ -153,10 +189,20 @@ public struct ProjectIndex: Hashable, Sendable {
             visited.insert(file)
             files.append(file)
             let text = read(file) ?? ""
-            let scan = LaTeXScanner.scan(MaskedSource(text), fileURL: file, parts: .all)
+            let source = MaskedSource(text)
+            let scan = LaTeXScanner.scan(source, fileURL: file, parts: .all)
             if file == root { index.magicComments = LaTeXScanner.magicComments(in: text) }
             labels.append(contentsOf: scan.labels)
             absorbDefinitions(scan)
+            let found = ReferenceScanner.scan(source, fileURL: file)
+            references.labels.append(contentsOf: found.labels)
+            references.optionLabels.append(contentsOf: found.optionLabels)
+            references.references.append(contentsOf: found.references)
+            references.citations.append(contentsOf: found.citations)
+            references.bibItems.append(contentsOf: found.bibItems)
+            dynamicPrefixes.formUnion(found.dynamicLabelPrefixes)
+            if found.usesExternalDocuments { references.usesExternalDocuments = true }
+            if found.usesExternalCitations { references.usesExternalCitations = true }
 
             // Interleave outline entries and includes by position.
             var entryIndex = 0
@@ -170,9 +216,10 @@ public struct ProjectIndex: Hashable, Sendable {
             for reference in scan.includes {
                 switch reference.kind {
                 case .bibliography, .addbibresource:
-                    if let bib = resolve(reference, includingFile: file, rootFile: root, fileExists: fileExists),
-                       seenBib.insert(bib).inserted {
-                        bibFiles.append(bib)
+                    if let bib = resolve(reference, includingFile: file, rootFile: root, fileExists: fileExists) {
+                        if seenBib.insert(bib).inserted { bibFiles.append(bib) }
+                    } else {
+                        unknownBibliography = true   // e.g. a file TeX finds through BIBINPUTS, or one not created yet
                     }
                 case .usepackage, .documentclass:
                     if let local = resolve(reference, includingFile: file, rootFile: root, fileExists: fileExists),
@@ -196,9 +243,24 @@ public struct ProjectIndex: Hashable, Sendable {
 
         var entries: [BibEntry] = []
         for bib in bibFiles {
-            if let text = read(bib) { entries.append(contentsOf: BibParser.entries(in: text, fileURL: bib)) }
+            if let text = read(bib) {
+                entries.append(contentsOf: BibParser.entries(in: text, fileURL: bib))
+            } else {
+                unknownBibliography = true
+            }
+            // biblatex also reads .ris / .json / .xml sources, which BibParser does not understand.
+            if bib.pathExtension.lowercased() != "bib" { unknownBibliography = true }
         }
 
+        index.labelSites = references.labels
+        index.optionLabels = references.optionLabels
+        index.referenceUses = references.references
+        index.citationUses = references.citations
+        index.bibItems = references.bibItems
+        index.dynamicLabelPrefixes = dynamicPrefixes.sorted()
+        index.usesExternalDocuments = references.usesExternalDocuments
+        index.usesExternalCitations = references.usesExternalCitations
+        index.hasUnknownBibliographySource = unknownBibliography
         index.files = files
         index.includeGraph = graph
         index.outline = buildTree(flatOutline)

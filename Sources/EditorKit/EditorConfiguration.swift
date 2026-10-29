@@ -1,5 +1,18 @@
 import AppKit
 
+/// Which keys accept the selected suggestion of the completion popup.
+public nonisolated enum CompletionAcceptKeys: String, CaseIterable, Hashable, Sendable, Codable {
+    /// Tab and Return both accept (the default).
+    case tabAndReturn
+    /// Only Tab accepts; Return closes the popup and starts a new line.
+    case tabOnly
+    /// Only Return accepts; Tab closes the popup and does its usual job (indent, next snippet field).
+    case returnOnly
+
+    public var acceptsTab: Bool { self != .returnOnly }
+    public var acceptsReturn: Bool { self != .tabOnly }
+}
+
 /// User-configurable editor settings (persisted by the app).
 public struct EditorConfiguration: Equatable, Sendable {
     /// nil → `NSFont.monospacedSystemFont` (SF Mono).
@@ -19,6 +32,18 @@ public struct EditorConfiguration: Equatable, Sendable {
     public var indentWidth: Int
     public var insertSpaces: Bool
     public var spellChecking: Bool
+    /// "Tab completes": Tab right after a completable prefix (`\com…`, inside `\ref{…}`, `\cite{…}`,
+    /// `\begin{…}`, file and package arguments) opens the completion popup, or inserts the only candidate
+    /// directly; anywhere else Tab keeps its usual behaviour (indent, next snippet field). Vim: insert mode only.
+    public var tabCompletes: Bool
+    /// Which keys accept the popup's selected suggestion.
+    public var completionAcceptKeys: CompletionAcceptKeys
+    /// The shortcut that always opens completion at the caret (⌃Space by default; nil = none). The app keeps it
+    /// equal to the shortcut of its Edit ▸ Complete command.
+    public var completionTrigger: KeyCombo?
+
+    /// The default completion trigger: ⌃Space.
+    public static let defaultCompletionTrigger = KeyCombo(.space, [.control])
 
     public init(
         fontName: String? = nil,
@@ -33,7 +58,10 @@ public struct EditorConfiguration: Equatable, Sendable {
         autoCompletion: Bool = true,
         indentWidth: Int = 2,
         insertSpaces: Bool = true,
-        spellChecking: Bool = false
+        spellChecking: Bool = false,
+        tabCompletes: Bool = true,
+        completionAcceptKeys: CompletionAcceptKeys = .tabAndReturn,
+        completionTrigger: KeyCombo? = EditorConfiguration.defaultCompletionTrigger
     ) {
         self.fontName = fontName
         self.fontSize = fontSize
@@ -48,6 +76,9 @@ public struct EditorConfiguration: Equatable, Sendable {
         self.indentWidth = indentWidth
         self.insertSpaces = insertSpaces
         self.spellChecking = spellChecking
+        self.tabCompletes = tabCompletes
+        self.completionAcceptKeys = completionAcceptKeys
+        self.completionTrigger = completionTrigger
     }
 }
 

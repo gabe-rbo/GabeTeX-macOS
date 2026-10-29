@@ -59,6 +59,8 @@ public final class LaTeXTextView: NSTextView {
     var snippetSession: SnippetSession?
     /// Offsets of closing characters inserted by auto-pairing (type-over / pair-delete only applies to them).
     var autoClosers: [Int] = []
+    /// Set by `keyDown` while it passes a Tab on that Tab completion already declined (`insertTab` then skips it).
+    var tabCompletionDeclined = false
     var hoverTrackingArea: NSTrackingArea?
 
     /// Edits inside `batchEdits` are reported once at the end.
@@ -153,6 +155,11 @@ public final class LaTeXTextView: NSTextView {
         isAutomaticDataDetectionEnabled = false
         isAutomaticLinkDetectionEnabled = false
         isAutomaticTextCompletionEnabled = false
+        // The system's inline predictions (gray prose suggestions, macOS 14+) and math results (macOS 15+) are
+        // delivered as marked text right after typing and claim Tab: in LaTeX source they would race with our
+        // completion ("Tab completes" saw marked text and indented instead).
+        inlinePredictionType = .no
+        mathExpressionCompletionType = .no
         isGrammarCheckingEnabled = false
         displaysLinkToolTips = false
         layoutManager?.allowsNonContiguousLayout = true

@@ -62,10 +62,10 @@ private struct OutlineBranch: View {
                 DisclosureGroup(isExpanded: expansion(for: node)) {
                     OutlineBranch(nodes: children, collapsed: $collapsed)
                 } label: {
-                    OutlineRow(entry: node.entry)
+                    OutlineRow(entry: node.entry, id: node.id)
                 }
             } else {
-                OutlineRow(entry: node.entry)
+                OutlineRow(entry: node.entry, id: node.id)
             }
         }
     }
@@ -83,14 +83,28 @@ private struct OutlineBranch: View {
 private struct OutlineRow: View {
     @Environment(ProjectWorkspace.self) private var workspace
     let entry: OutlineEntry
+    /// `OutlineNode.id`: how the word count of this heading is looked up.
+    let id: String
 
     var body: some View {
-        Label {
-            Text(entry.title.isEmpty ? String(localized: "Untitled") : entry.title)
-                .font(font)
-                .lineLimit(2)
-        } icon: {
-            Image(systemName: symbol).foregroundStyle(.secondary)
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Label {
+                Text(entry.title.isEmpty ? String(localized: "Untitled") : entry.title)
+                    .font(font)
+                    .lineLimit(2)
+            } icon: {
+                Image(systemName: symbol).foregroundStyle(.secondary)
+            }
+            if let words = workspace.statistics.wordsByID[id], words > 0 {
+                Spacer(minLength: 4)
+                Text(verbatim: StatisticsText.number(words))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .help(Text(verbatim: StatisticsText.words(words)))
+                    .accessibilityLabel(Text(verbatim: StatisticsText.words(words)))
+            }
         }
         .contentShape(Rectangle())
         .onTapGesture {

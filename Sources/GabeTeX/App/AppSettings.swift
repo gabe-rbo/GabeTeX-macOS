@@ -35,6 +35,8 @@ final class AppSettings {
         static let indentWidth = "settings.editor.indentWidth"
         static let insertSpaces = "settings.editor.insertSpaces"
         static let spellChecking = "settings.editor.spellChecking"
+        static let tabCompletes = "settings.editor.tabCompletes"
+        static let completionAcceptKeys = "settings.editor.completionAcceptKeys"
         static let showPreview = "ui.showPreview"
         static let showIssues = "ui.showIssues"
     }
@@ -71,6 +73,12 @@ final class AppSettings {
     var indentWidth: Int { didSet { defaults.set(indentWidth, forKey: Key.indentWidth) } }
     var insertSpaces: Bool { didSet { defaults.set(insertSpaces, forKey: Key.insertSpaces) } }
     var spellChecking: Bool { didSet { defaults.set(spellChecking, forKey: Key.spellChecking) } }
+    /// Tab right after a completable prefix completes (on by default; Gabe's choice).
+    var tabCompletes: Bool { didSet { defaults.set(tabCompletes, forKey: Key.tabCompletes) } }
+    /// Which keys accept a suggestion of the completion popup.
+    var completionAcceptKeys: CompletionAcceptKeys {
+        didSet { defaults.set(completionAcceptKeys.rawValue, forKey: Key.completionAcceptKeys) }
+    }
 
     // MARK: Window layout (shared by all project windows)
 
@@ -106,12 +114,15 @@ final class AppSettings {
         indentWidth = min(8, max(1, int(Key.indentWidth, 2)))
         insertSpaces = bool(Key.insertSpaces, true)
         spellChecking = bool(Key.spellChecking, false)
+        tabCompletes = bool(Key.tabCompletes, true)
+        completionAcceptKeys = CompletionAcceptKeys(rawValue: d.string(forKey: Key.completionAcceptKeys) ?? "") ?? .tabAndReturn
 
         showPreview = bool(Key.showPreview, true)
         showIssues = bool(Key.showIssues, false)
     }
 
-    /// The configuration handed to `LaTeXEditorView`.
+    /// The configuration handed to `LaTeXEditorView`. The completion trigger is the shortcut of Edit ▸ Complete
+    /// (Settings › Shortcuts), so the menu and the editor always agree.
     var editorConfiguration: EditorConfiguration {
         EditorConfiguration(
             fontName: fontName.isEmpty ? nil : fontName,
@@ -126,7 +137,10 @@ final class AppSettings {
             autoCompletion: autoCompletion,
             indentWidth: indentWidth,
             insertSpaces: insertSpaces,
-            spellChecking: spellChecking
+            spellChecking: spellChecking,
+            tabCompletes: tabCompletes,
+            completionAcceptKeys: completionAcceptKeys,
+            completionTrigger: ShortcutStore.shared.combo(for: .complete)
         )
     }
 

@@ -49,12 +49,11 @@ struct EditorSettingsView: View {
             Section {
                 Toggle("Close brackets and dollar signs automatically", isOn: $settings.autoPairBrackets)
                 Toggle("Add \\end{…} after \\begin{…}", isOn: $settings.autoCloseEnvironments)
-                Toggle("Suggest completions while typing", isOn: $settings.autoCompletion)
             } header: {
                 Text("Typing")
-            } footer: {
-                Text("Press ⌃Space at any time to show completions.")
             }
+
+            AutocompleteSettingsSection()
 
             Section {
                 Stepper(value: $settings.indentWidth, in: 1...8) {

@@ -38,6 +38,7 @@ struct StatusBar: View {
                     }
                     .help("Text encoding of the current file")
                 }
+                if workspace.mainFile != nil { StatisticsCapsule() }
                 CursorCapsule(editor: workspace.editor)
             }
             .padding(.horizontal, 12)
@@ -45,6 +46,8 @@ struct StatusBar: View {
         }
         .animation(.smooth(duration: 0.2), value: workspace.statusMessage)
         .accessibilityElement(children: .contain)
+        // Keeps the word and page counts (capsule, popover, outline) up to date while the window is open.
+        .task { await workspace.runStatisticsUpdates() }
     }
 
     private func capsule<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {

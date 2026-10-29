@@ -11,8 +11,10 @@ It has three non-negotiables:
 
 Also part of the app: an integrated PDF preview with precise two-way SyncTeX navigation (word-level, with a brief
 highlight at the destination) that can be detached into its own window; autocompletion (commands, environments,
-`\ref` labels, `\cite` keys, files, packages); a document outline; an optional Vim mode; color labels for recent
-projects; Touch Bar support; and a UI localized in English and Brazilian Portuguese (it follows the system language).
+`\ref` labels, `\cite` keys, files, packages); live reference and citation warnings; a document outline with word
+and page counts; a Beamer presentation mode with a presenter view; a command palette with editable keyboard shortcuts;
+an optional Vim mode; color labels for recent projects; Touch Bar support; and a UI localized in English and Brazilian
+Portuguese (it follows the system language).
 
 This document describes how the code is organized and why the trickier parts work the way they do. For how to
 build and contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -31,12 +33,12 @@ PreviewKit (PDFKit) ────────────────────
 
 | Module | Kind | Responsibility |
 |---|---|---|
-| TeXCore | pure Swift, `Sendable` | Shared models (Diagnostic, Outline, Symbols, Completion, ProjectTemplate), `LineIndex`, `LaTeXTokenizer`, `LaTeXScanner`, `BibParser`, `ProjectIndex`, `StructureLinter`, `CompletionEngine`, `Snippet`, the completion catalog data, the project templates |
+| TeXCore | pure Swift, `Sendable` | Shared models (Diagnostic, Outline, Symbols, Completion, ProjectTemplate), `LineIndex`, `LaTeXTokenizer`, `LaTeXScanner`, `BibParser`, `ProjectIndex`, `StructureLinter`, `ReferenceLinter`, `DocumentStatistics`, `CompletionEngine`, `Snippet`, the completion catalog data, the project templates |
 | VimKit | pure Swift, MainActor | `VimEngine` state machine over the `VimTextBuffer` protocol |
 | TeXToolchain | Foundation + actors | `TeXDistributionLocator`, `LaTeXCompiler` (shadow workspace + latexmk), `TeXLogParser`, `ChkTeXLinter`, `TeXPackageManager` (tlmgr), `SyncTeX`, `DirectoryWatcher` |
-| EditorKit | AppKit (TextKit 1), MainActor | `SourceBuffer`, `LaTeXEditorView` (`NSViewRepresentable`), `EditorController`, `EditorConfiguration`, highlighting, gutter, diagnostics, completion popup, reveal highlight |
-| PreviewKit | PDFKit, MainActor | `PDFPreviewView`, `PDFPreviewController`, `PDFPreviewControls`, `PDFPreviewPlaceholder`, highlights, sync clicks |
-| GabeTeX | SwiftUI app | windows, project workspace model, sidebar, tabs, Quick Open, toolbar, Issues panel, status bar, Settings, new-project flow, Welcome window and project labels, compile orchestration, package-install flow, SyncTeX glue, detachable PDF window, Touch Bar |
+| EditorKit | AppKit (TextKit 1), MainActor | `SourceBuffer`, `LaTeXEditorView` (`NSViewRepresentable`), `EditorController`, `EditorConfiguration`, highlighting, gutter, diagnostics, completion popup and Tab completion, reveal highlight |
+| PreviewKit | PDFKit, MainActor | `PDFPreviewView`, `PDFPreviewController`, `PDFPreviewControls`, `PDFPreviewPlaceholder`, highlights, sync clicks, the presentation (audience + presenter) windows |
+| GabeTeX | SwiftUI app | windows, project workspace model, sidebar, tabs, Quick Open, toolbar, Issues panel, status bar, Settings, new-project flow, Welcome window and project labels, compile orchestration, package-install flow, SyncTeX glue, detachable PDF window, word and page count, presentation control, `CommandRegistry` / `ShortcutStore` / Command Palette, Touch Bar |
 | CheckKit and `*Checks` | executables | A small assertion harness and the check executables that replace XCTest (see [Checks](#checks)) |
 
 The UI modules (EditorKit, PreviewKit, VimKit, GabeTeX) are **MainActor by default**
@@ -139,6 +141,46 @@ Conservative, so that valid documents never produce false positives: unmatched `
 opening brace), `\begin{x}…\end{y}` mismatch (always), unclosed `\begin` and stray `\end` (only in files containing
 `\begin{document}`), and unclosed inline `$` at the end of a paragraph (a warning). It ignores comments, verbatim,
 `\{ \} \$` and `\verb`. Messages are user-facing and go through `String(localized:)`.
+
+### ReferenceLinter
+Live warnings for cross-references and citations, computed from the project index.
+
+- **Uses are indexed, not just definitions.** Besides labels and bibliography entries, the index records every
+  reference and citation *use* with its file, line, column and length (UTF-16):
+  - references: `\ref \eqref \pageref \autoref \nameref \vref \cref \Cref \cpageref \labelcref \crefrange`, including
+    comma lists and both keys of a range;
+  - citations: `\cite \citep \citet \citealp \citeauthor \citeyear \parencite \textcite \autocite \footcite
+    \smartcite \supercite \nocite`, including starred forms, optional `[…][…]` arguments and comma lists
+    (`\nocite{*}` is skipped).
+
+  Comments and verbatim are ignored (the scanner works on `MaskedSource`), and keys containing `#` or `\` (macro
+  parameters and constructed keys) are never reported. **Label definitions keep every occurrence**, so duplicates can be
+  found.
+- `ReferenceLinter.diagnostics(index:) -> [Diagnostic]` is pure, `nonisolated` and fast. It produces warnings with
+  source `.structure`, whose `length` is the key's UTF-16 length so the editor underlines exactly the key:
+  - **Undefined reference** (“Reference ‘key’ is not defined”) at the use. Skipped entirely when the project uses `xr`
+    or `xr-hyper` (`\externaldocument`), because the label may live in another document.
+  - **Duplicate label** (“Label ‘key’ is defined more than once”) at *every* definition; the `detail` names the other
+    location(s) as `file:line`.
+  - **Missing citation** (“Citation ‘key’ is not in the bibliography”) at the use. The bibliography is the union of the
+    keys of every `.bib` file (`\bibliography{a,b}`, `\addbibresource{…}`) and every `\bibitem{key}`. A project with no
+    bibliography source at all gets no citation warnings: the user may simply not be done yet.
+- The app recomputes these diagnostics after every index rebuild (which already uses unsaved buffer text) and merges
+  them with the compile and structure diagnostics, keeping diagnostic ids stable across rebuilds so underlines do not
+  flicker.
+
+### DocumentStatistics
+Word counts per section, pure and independent of any PDF.
+
+- Walks the document in reading order from the root file, following `\input` / `\include` / `\subfile` exactly as the
+  outline does. For every outline section (part … subparagraph, plus the text before the first section, reported as
+  “Preamble/Front matter”) it counts the **words of text**, the **words in headings**, the number of **inline math**
+  expressions and the number of **display math** expressions, and it reports document totals.
+- The counting rule is close to `texcount`'s defaults. Commands and their non-text arguments (`\label{}`, `\ref{}`,
+  `\cite{}`, `\begin{env}`, `\includegraphics`, …), comments, math, verbatim and the preamble are **not** words. The text
+  arguments of commands (`\emph{…}`, `\textbf{…}`, section titles, captions, footnotes) **are** counted. A hyphenated
+  word and a word with Portuguese accents count as one word; numbers count as words.
+- Pages are attributed by the app, not here: see [Word and page count](#word-and-page-count).
 
 ### Completion
 - Contexts and ranking are documented in the doc comment of `CompletionEngine.swift`. After a bare `\` the most
@@ -312,6 +354,13 @@ and hidden paths are ignored; changes are coalesced and delivered as changed URL
   and manually with ⌃Space / ⌥⎋. ↑↓ PgUp PgDn move, Return / Tab accept, Esc dismisses. Accepting replaces
   `replacementRange` with the snippet (indenting `\n` to the current line's indentation, `\t` → the indent unit) and
   starts a tab-stop session (Tab / ⇧Tab cycle; it ends on Esc or when the caret leaves). One undo group.
+- **Tab completes** (`EditorConfiguration`, default **on**; handled by `CompletionController` and the text view's Tab
+  handling). With the caret right after a completable prefix (`\com…`, or inside `\ref{…}`, `\cite{…}`, `\begin{…}` or
+  a file argument), Tab opens the completion popup, or inserts directly when exactly one candidate matches. In every
+  other situation Tab keeps its previous meaning: accept the open popup, jump to the next snippet field, or indent.
+  ⌃Space remains an always-on trigger (and, like every shortcut, can be rebound). Which keys *accept* a suggestion is
+  configurable (Tab and Return, Tab only, or Return only). Both settings live in `EditorConfiguration` and are covered
+  by headless `EditorKitChecks`. With Vim mode on, Tab completion applies in insert mode only.
 - **⌘-click** (`TextViewMouse`, `TextViewSync`):
   - on an include argument → `controller.onOpenReference`;
   - on a `\ref`-family key → `controller.onOpenLabel`;
@@ -369,6 +418,30 @@ view leaving its window.
 - Tracks the current page and scale for the controls. `PDFPreviewControls` is a floating glass capsule (zoom −, zoom %,
   zoom +, fit width, "3 / 12"). `PDFPreviewPlaceholder` is the empty state.
 
+### Presentation
+PreviewKit also contains the presentation mode: it works with **any compiled PDF** (Beamer slides are the target) and
+is controlled by the app through the workspace (see [Presentation mode](#presentation-mode)).
+
+- **Pure logic, tested headlessly.** The slide math and the navigation are plain value types with no AppKit: the
+  navigation state machine (current slide, next/previous, first/last, digit entry with Return to go to a slide, black and
+  white screens, clamping the index when a reload changes the page count) and the geometry that splits a page into its
+  slide and notes halves. `EditorKitChecks` exercises them.
+- **Audience window**: borderless, full screen on the external display, black background, slide scaled to fit, no
+  chrome. The cursor hides after 2 s without movement; a click advances.
+- **Presenter window**: full screen on the main display. It shows the current slide large, the next slide, a slide
+  counter (“5 / 23”), an elapsed timer (pause, resume, reset), the clock, and a notes pane, with a Liquid Glass controls
+  bar. The chrome follows Light and Dark; the slides always sit on black.
+- **One display**: the audience view is full screen on that display and **P** toggles the presenter view on top of it.
+- **Beamer notes**: when pages are about twice as wide as tall (`\setbeameroption{show notes on second screen=right}`),
+  the audience shows the slide half of each page and the presenter's notes pane shows the other half. `=left` is
+  mirrored. A “Notes on” setting offers right, left, or none (automatic).
+- **Keys** work in both windows: next = → ↓ Space Page Down Return; previous = ← ↑ Page Up Delete; Home / End; digits then
+  Return jump to a slide; B or . = black screen; W or , = white screen; Esc ends the presentation.
+- **Live reload** keeps the current slide index (clamped to the new page count). With Reduce Motion there are no
+  transitions.
+- Windows are managed by a controller that follows `NSScreen` changes: when displays are plugged or unplugged it
+  re-places the windows, or ends the presentation gracefully.
+
 ---
 
 ## Source ↔ PDF sync
@@ -411,11 +484,17 @@ for about 0.6 s with no selection. It scrolls only if the target is off-screen a
   folder with that file selected. Finder and Dock opens (`application(_:open:)`) route to project windows.
 - **PDF window**: `WindowGroup(id: "pdf", for: <reference to the project folder>)`, showing the same
   `PDFPreviewController` as its project window (see [Detachable PDF](#detachable-pdf)).
+- **Presentation windows**: an audience window and a presenter window, created and owned by a PreviewKit controller on
+  behalf of the project workspace (see [Presentation mode](#presentation-mode)).
+- **Command Palette**: a floating panel inside the project window (and the detached PDF window), see
+  [Commands, shortcuts and the Command Palette](#commands-shortcuts-and-the-command-palette).
 - **Settings**: General (default engine, live compile on / off, live delay 0.5–5 s, compile on save, chktex on / off,
   sync the PDF to the cursor after a build, jump-to-source trigger, follow cursor in PDF), Editor (font, size, line
   height, line numbers, wrapping, current line, auto-pair, auto-close environments, auto-completion, indent width and
-  spaces, spell check, **Vim mode**), TeX (detected distribution, version and tools ✓ / ✗, custom bin directory
-  override, writable or admin-required note, a link to install MacTeX if none is found).
+  spaces, spell check, **Vim mode**, the autocomplete options: whether Tab completes and which keys accept a
+  suggestion), TeX (detected distribution, version and tools ✓ / ✗, custom bin directory override, writable or
+  admin-required note, a link to install MacTeX if none is found), **Shortcuts** (every command and its shortcut, see
+  below).
 
 ### Project window layout
 ```
@@ -423,15 +502,18 @@ NavigationSplitView
 ├─ sidebar: [Files | Outline] segmented
 │   Files: tree (folders first, SF Symbol per type, ★ main file, dirty dot); context menu: New File,
 │          New Folder, Rename, Duplicate, Move to Trash, Reveal in Finder, Set as Main Document
-│   Outline: ProjectIndex.outline (sections / frames / labels) across files → click jumps
+│   Outline: ProjectIndex.outline (sections / frames / labels) across files → click jumps;
+│            a small secondary word count trails each section
 └─ detail:
     ├─ tab strip (glass pills: icon, name, dirty dot, close; ⌘1…⌘9, ⌃Tab cycling)
     ├─ banners (missing package / file changed on disk / no TeX found): glass
     ├─ EditorPreviewSplit: editor | PDF preview (toggle ⌥⌘P; 55/45 by default, divider remembered per project), floating PDFPreviewControls
     ├─ Issues panel (toggle ⇧⌘M): errors / warnings / bad boxes filter, click → jump; Log tab with the raw log
-    └─ status bar: compile state capsule, error / warning counts, engine, distribution, Vim mode, Ln/Col
+    └─ status bar: compile state capsule, error / warning counts, word / page count capsule (click → Document
+       Statistics popover), engine, distribution, Vim mode, Ln/Col
 toolbar: Compile (glassProminent, spinner while compiling) · Stop · engine menu · live-compile toggle ·
-         preview toggle · detach-PDF toggle · issues toggle
+         preview toggle · detach-PDF toggle · issues toggle · Present (play; only for Beamer documents)
+overlay: Command Palette (⇧⌘P), Quick Open (⌘P)
 ```
 
 ### ProjectWorkspace (`@Observable`, one per window)
@@ -445,7 +527,7 @@ toolbar: Compile (glassProminent, spinner while compiling) · Stop · engine men
   diagnostics, the preview (the newest PDF is shown even when the compile failed but produced one) and the status are
   updated. The engine comes from `% !TEX program`, then the project setting, then the default.
 - Diagnostics = compile ∪ chktex (current file, debounced 1.5 s, if enabled) ∪ structure lint (on edit, debounced
-  0.3 s).
+  0.3 s) ∪ [reference and citation warnings](#referencelinter) (after each index rebuild).
 - **Missing package flow**: `result.missingFiles` → a banner (“tikz-cd.sty” is not installed) with [Install] and
   [Dismiss] → `packages(providing:)` → a choice if several packages match → `install` (administrator prompt) with
   progress → recompile. Errors appear in an alert with actionable text (update tlmgr, update the TeX distribution).
@@ -456,11 +538,12 @@ toolbar: Compile (glassProminent, spinner while compiling) · Stop · engine men
   changed underneath asks what to do. External changes: a clean buffer reloads silently; a dirty one shows a banner
   with [Reload] and [Keep Mine].
 - **Quick Open** (⌘P): a glass palette with fuzzy file search; ↑↓ and Return.
-- Menus via `.commands` and `FocusedValue` for the active workspace: File (New Project ⇧⌘N, Open ⌘O, Open Recent,
-  New File ⌘N, Save ⌘S, Save All ⌥⌘S, Project Labels), Edit (Toggle Comment ⌘/, Complete ⌃Space), View (preview ⌥⌘P,
-  Open PDF in Separate Window / Attach PDF to Project Window, issues ⇧⌘M, Quick Open ⌘P), **Build** (Compile ⌘B,
-  Stop ⌘., Live Compile, Engine ▸, Set as Main, Clean Auxiliary Files ⇧⌘K, Show in PDF ⇧⌘J, Next / Previous
-  Issue ⌘' / ⇧⌘').
+- Menus via `.commands` and `FocusedValue` for the active workspace, generated from the command registry (see below).
+  Default shortcuts: File (New Project ⇧⌘N, Open ⌘O, Open Recent, New File ⌘N, Save ⌘S, Save All ⌥⌘S, Project Labels),
+  Edit (Toggle Comment ⌘/, Complete ⌃Space), View (preview ⌥⌘P, Open PDF in Separate Window / Attach PDF to Project
+  Window, issues ⇧⌘M, Quick Open ⌘P), **Build** (Compile ⌘B, Stop ⌘., Live Compile, Engine ▸, Set as Main, Clean
+  Auxiliary Files ⇧⌘K, Show in PDF ⇧⌘J, Next / Previous Issue ⌘' / ⇧⌘'). Start Presentation (⌥⌘↩) and the Command
+  Palette (⇧⌘P) are commands too.
 - Unbundled `swift run` must still work (`setActivationPolicy(.regular)`).
 
 ### Project labels
@@ -490,6 +573,52 @@ and they are unrelated to Finder tags.
 - Everything works the same while detached: live reloads, forward-sync highlights, PDF → source sync (which activates
   the project window and focuses the editor), and the menu shortcuts (⌘B etc.), because the PDF window publishes the
   same focused scene values.
+
+### Word and page count
+- **Words** come from `DocumentStatistics` ([above](#documentstatistics)), recomputed in the background after index
+  rebuilds. The **status bar capsule** shows “1 234 words · 12 pages” with locale-aware number formatting; while the
+  editor has a selection it shows “86 of 1 234 words”. The outline sidebar shows a small trailing word count per
+  section in a secondary style.
+- **Pages**: the total is the page count of the loaded PDF (PDFKit). Per section, the app asks `SyncTeX.forward` for
+  the page of each section's heading line; a section spans from its own page to the page of the next section, and the
+  count is shown with “≈” when sections share pages. This needs a PDF and its `.synctex` file; without them the
+  per-section pages show “—”.
+- Page attribution never blocks the UI: it runs in the background, is debounced, and a stale request is cancelled when
+  a newer one arrives.
+- Clicking the capsule (or running **Document Statistics** from the command palette) opens a glass popover: a table with
+  one row per section (title indented by level, words, pages), the document totals, and a footnote stating the
+  counting rule.
+
+### Presentation mode
+`ProjectWorkspace` exposes `canPresent`, `isPresenting`, `startPresentation()` and `stopPresentation()`.
+- `canPresent` is true whenever a compiled PDF exists, so the **Start Presentation** command (⌥⌘↩, also in the command
+  palette) works for any document. The **Present** (play) toolbar button is shown only for Beamer documents, detected by
+  `\documentclass{beamer}` in the root file.
+- Starting a presentation hands the current PDF to PreviewKit's presentation controller (see
+  [Presentation](#presentation)), which creates the audience and presenter windows on the right displays. When the
+  workspace reloads the PDF after a live compile, the controller keeps the current slide.
+- Ending the presentation (Esc, or `stopPresentation()`) closes both windows.
+
+### Commands, shortcuts and the Command Palette
+- **`CommandRegistry`** is the single list of everything the user can do. Each `AppCommand` has a stable string `id`, a
+  `title`, a `category`, an optional `defaultShortcut`, an `isEnabled(context)` and a `perform(context)`. It covers every
+  menu command (File, Edit, View, Build, project labels, the PDF window, Quick Open, statistics, presentation …) and the
+  editor actions: Toggle Comment, Indent / Outdent, Complete, and the markup actions that the Touch Bar also uses through
+  `EditorController.performMarkup` (inline and display math, fractions, sub- and superscripts, bold / italic / emphasis,
+  environments, sections). `Commands.swift` builds the menus from the registry, so a customized shortcut shows in the
+  menu and works. The menus and the palette run the same entries, so each action has one code path; the Touch Bar
+  shares the same markup actions.
+- **`ShortcutStore`** keeps the user's overrides on top of the defaults, persisted in `UserDefaults` as JSON, keyed by
+  command id. It detects conflicts (two commands on one combination), refuses system-reserved combinations (⌘Q, ⌘H, ⌘Tab,
+  ⌘Space, ⌘, …) and can restore one command or everything to the defaults.
+- **Command Palette** (⇧⌘P): a floating glass panel at the top of the project window, in the style of Spotlight. It
+  searches with the same fuzzy matcher as Quick Open. Each row shows an SF Symbol, the title, the category and the
+  shortcut glyphs; recently used commands come first. ↑↓ moves, Return runs, Esc closes. Disabled commands are shown dimmed
+  and cannot be run. It also works while the detached PDF window is key, because that window publishes the same focused
+  scene values as the project window.
+- **Settings › Shortcuts**: a searchable list grouped by category. Each row has a shortcut recorder (click, then press
+  the combination; ⌫ clears it; Esc cancels). A conflict shows an inline warning with a **Replace** action; there are
+  per-row and global **Restore Defaults**.
 
 ### Touch Bar
 On Macs that have a Touch Bar, the app provides an `NSTouchBar` through the responder chain, so the bar follows the focus:
@@ -523,9 +652,9 @@ non-zero on failure).
 
 | Target | Covers |
 |---|---|
-| `TeXCoreChecks` | tokenizer, scanner, project index, linter, completion, snippets, bibliography parser, performance budgets |
+| `TeXCoreChecks` | tokenizer, scanner, project index, structure and reference linters (every reference and citation macro form, comma lists and ranges, multi-file projects, duplicates, `\bibitem` vs `.bib`, the no-bibliography and `xr` cases, UTF-16 columns), document statistics, completion, snippets, bibliography parser, performance budgets |
 | `VimKitChecks` | motions, operators, text objects, visual mode, registers, ex commands and search, Unicode, fuzzing |
-| `EditorKitChecks` | headless `NSTextView` editing behaviour (no window needed), highlights and sync helpers |
+| `EditorKitChecks` | headless `NSTextView` editing behaviour (no window needed), Tab completion, highlights and sync helpers, and the pure presentation logic (slide and notes geometry, navigation, digit entry, clamping on reload) |
 | `TeXToolchainChecks` | log parser against real-log fixtures, process runner, shadow workspace and its safety guarantees, SyncTeX, and (without `--unit`) end-to-end compiles on a machine with MacTeX |
 
 ---

@@ -24,6 +24,8 @@ final class CompletionController {
     private var pendingTrigger: Task<Void, Never>?
     private var refreshScheduled = false
     private var resignObserver: NSObjectProtocol?
+    /// The user picked the selected row (arrow keys); otherwise it is the default one (see `acceptWithTab`).
+    private var selectionChosen = false
     /// Auto-trigger delay after typing.
     var debounce: Duration = .milliseconds(80)
 
@@ -52,6 +54,10 @@ final class CompletionController {
         }
         present(fresh, resetSelection: true)
     }
+
+    /// True while an automatic popup is scheduled: the user has just typed a completable prefix and the popup
+    /// is about to open (`debounce`).
+    var isTriggerPending: Bool { pendingTrigger != nil }
 
     func cancelPendingTrigger() {
         pendingTrigger?.cancel()
@@ -133,7 +139,7 @@ final class CompletionController {
 
     // MARK: - Presentation
 
-    private func present(_ fresh: CompletionResult, resetSelection: Bool) {
+    private func present(_ fresh: CompletionResult, resetSelection: Bool, selecting preferred: Int = 0) {
         let previousID = result.flatMap { r in model.items.indices.contains(model.selectedIndex) ? r.items[model.selectedIndex].id : nil }
         result = fresh
         model.prefix = fresh.prefix
@@ -141,7 +147,8 @@ final class CompletionController {
         if !resetSelection, let previousID, let index = fresh.items.firstIndex(where: { $0.id == previousID }) {
             model.selectedIndex = index
         } else {
-            model.selectedIndex = 0
+            model.selectedIndex = fresh.items.indices.contains(preferred) ? preferred : 0
+            selectionChosen = false
         }
         model.scrollRequest += 1
         showPanel()
@@ -270,12 +277,23 @@ final class CompletionController {
             if event.keyCode == 49, flags == .control { return false } // ⌃Space: re-trigger
             return false
         }
+        let keys = textView.configuration.completionAcceptKeys
         switch event.keyCode {
         case 125: move(by: 1); return true                         // ↓
         case 126: move(by: -1); return true                        // ↑
         case 121: move(by: Self.maxVisibleRows - 1); return true    // PgDn
         case 116: move(by: -(Self.maxVisibleRows - 1)); return true // PgUp
-        case 36, 76, 48: acceptSelected(); return true              // Return, Enter, Tab
+        case 36, 76:                                                // Return, Enter
+            if keys.acceptsReturn { acceptSelected(); return true }
+            dismiss()
+            return false                                            // a new line, as usual
+        case 48:                                                    // Tab
+            if keys.acceptsTab, !event.modifierFlags.contains(.shift) { acceptWithTab(); return true }
+            if keys.acceptsTab { acceptSelected(); return true }
+            dismiss()
+            if event.modifierFlags.contains(.shift) { return false } // ⇧Tab: outdent / previous field
+            textView.insertPlainTab()                               // indent / next snippet field
+            return true
         case 53: dismiss(); return true                             // Esc
         default: return false
         }
@@ -288,9 +306,107 @@ final class CompletionController {
         case #selector(NSResponder.moveUp(_:)): move(by: -1)
         case #selector(NSResponder.pageDown(_:)), #selector(NSResponder.scrollPageDown(_:)): move(by: Self.maxVisibleRows - 1)
         case #selector(NSResponder.pageUp(_:)), #selector(NSResponder.scrollPageUp(_:)): move(by: -(Self.maxVisibleRows - 1))
-        case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertTab(_:)): acceptSelected()
+        case #selector(NSResponder.insertNewline(_:)):
+            guard textView.configuration.completionAcceptKeys.acceptsReturn else {
+                dismiss()
+                return false                                        // the text view inserts the new line
+            }
+            acceptSelected()
+        case #selector(NSResponder.insertTab(_:)):
+            if textView.configuration.completionAcceptKeys.acceptsTab {
+                acceptWithTab()
+            } else {
+                dismiss()
+                textView.insertPlainTab()
+            }
         case #selector(NSResponder.cancelOperation(_:)): dismiss()
         default: return false
+        }
+        return true
+    }
+
+    // MARK: - Tab completion
+
+    /// What Tab inserts from a result when the user has not picked a row.
+    private enum TabChoice: Equatable {
+        case accept(Int)
+        /// Nothing to complete: Tab does its usual job (indent, next snippet field).
+        case plainTab
+    }
+
+    /// Whether accepting `item` would only re-type the text it replaces (`\sec` → `\sec`).
+    private func isNoOp(_ item: CompletionItem, in result: CompletionResult, text: NSString) -> Bool {
+        let range = result.replacementRange
+        let current = range.end <= text.length ? text.substring(with: range) : ""
+        let snippet = Snippet(parsing: item.insertText)
+        return snippet.text == current && snippet.tabStops.isEmpty
+    }
+
+    /// Tab never just re-types what is there. The first suggestion is taken unless it equals the typed text
+    /// (`\sec` is a command, the secant): then Tab extends to the first suggestion that starts with it
+    /// (`\section`), or — when there is none (`\alpha`), or inside a snippet field, where Tab means "next
+    /// field" — does its usual job.
+    private func tabChoice(for result: CompletionResult) -> TabChoice {
+        guard let storage = textView.textStorage, let first = result.items.first else { return .plainTab }
+        let text = storage.mutableString
+        if !isNoOp(first, in: result, text: text) { return .accept(0) }
+        if textView.snippetSession != nil { return .plainTab }
+        let typed = result.prefix.lowercased()
+        let extended = result.items.firstIndex { item in
+            item.label.lowercased().hasPrefix(typed) && !isNoOp(item, in: result, text: text)
+        }
+        return extended.map { .accept($0) } ?? .plainTab
+    }
+
+    /// Tab with the popup open (Tab is an accept key): accepts the row the user picked; otherwise what
+    /// `tabChoice` says — exactly what Tab does before the popup has appeared (`tabComplete`).
+    func acceptWithTab() {
+        if selectionChosen {
+            acceptSelected()
+            return
+        }
+        refreshNow()
+        guard let result else {
+            textView.insertPlainTab()
+            return
+        }
+        switch tabChoice(for: result) {
+        case .accept(let index):
+            accept(index: index)
+        case .plainTab:
+            dismiss()
+            textView.insertPlainTab()
+        }
+    }
+
+    /// "Tab completes" (`EditorConfiguration.tabCompletes`) with the popup closed. Returns false — Tab then does
+    /// its usual job — when there is no completable prefix right before the caret or nothing to add:
+    /// - a command needs at least one letter after the backslash (`\s|`, not a bare `\|`) and must end at the
+    ///   caret (not `\sec|tion`); argument contexts (`\ref{|`, `\cite{a,|`, `\begin{fig|`, files, packages)
+    ///   may be empty;
+    /// - suggestions that only re-type the text don't count (see `tabChoice`).
+    ///
+    /// Otherwise: exactly one suggestion adds something → it is inserted. Several → if the user has just typed
+    /// (`triggerPending`: the automatic popup was about to open) and Tab accepts, Tab does what it would do with
+    /// that popup open — insert the suggestion — so the result never depends on typing speed; else the popup
+    /// opens with that suggestion selected.
+    func tabComplete(triggerPending: Bool = false) -> Bool {
+        cancelPendingTrigger()
+        guard textView.buffer != nil, textView.vim?.isInsertLike ?? true, let storage = textView.textStorage,
+              let fresh = compute() else { return false }
+        let text = storage.mutableString
+        let caret = textView.selectedRange().location
+        if fresh.prefix.hasPrefix("\\") {
+            guard fresh.prefix.utf16.count >= 2 else { return false }
+            if caret < text.length, TextScan.isCommandLetter(text.character(at: caret)) { return false }
+        }
+        guard case .accept(let index) = tabChoice(for: fresh) else { return false }
+        let additions = fresh.items.filter { !isNoOp($0, in: fresh, text: text) }.count
+        if additions == 1 || (triggerPending && textView.configuration.completionAcceptKeys.acceptsTab) {
+            dismiss()
+            textView.insertCompletion(fresh.items[index], replacing: fresh.replacementRange)
+        } else {
+            present(fresh, resetSelection: true, selecting: index)
         }
         return true
     }
@@ -306,6 +422,7 @@ final class CompletionController {
         }
         model.selectedIndex = index
         model.scrollRequest += 1
+        selectionChosen = true
     }
 
     func acceptSelected() {

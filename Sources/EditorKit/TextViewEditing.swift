@@ -303,13 +303,43 @@ extension LaTeXTextView {
 
     // MARK: - Tab / ⇧Tab
 
+    /// Tab: accepts the open completion popup (when Tab is an accept key), completes the prefix before the caret
+    /// ("Tab completes", see `EditorConfiguration.tabCompletes`), else moves to the next snippet field or indents.
     public override func insertTab(_ sender: Any?) {
+        let triggerPending = completion.isTriggerPending
+        completion.cancelPendingTrigger()   // a debounced popup for the text before Tab is stale now
+        if completion.isVisible {
+            // Normally intercepted by `doCommand(by:)`; this is the direct (programmatic) path.
+            if configuration.completionAcceptKeys.acceptsTab {
+                completion.acceptWithTab()
+                return
+            }
+            completion.dismiss()
+        } else if !tabCompletionDeclined, completesWithTab(triggerPending: triggerPending) {
+            return
+        }
+        insertPlainTab()
+    }
+
+    /// Whether Tab completion applies here and did something: a single empty selection in an editable buffer,
+    /// no marked text, Vim (if on) in insert mode, and no snippet whose fields are mirrored (completing inside
+    /// `\begin{$1}…\end{$1}` would duplicate the `\end`).
+    func completesWithTab(triggerPending: Bool = false) -> Bool {
+        guard configuration.tabCompletes, buffer != nil, isEditable, !hasMarkedText(), selectedRanges.count == 1,
+              selectedRange().length == 0, vim?.isInsertLike ?? true, snippetSession?.hasMirrors != true else {
+            return false
+        }
+        return completion.tabComplete(triggerPending: triggerPending)
+    }
+
+    /// Tab without completion: next snippet field, indent the selected lines, or insert indentation.
+    func insertPlainTab() {
         if snippetSession != nil {
             advanceSnippet()
             return
         }
         guard let storage = textStorage, !hasMarkedText() else {
-            super.insertTab(sender)
+            super.insertTab(nil)
             return
         }
         let selection = selectedRange()

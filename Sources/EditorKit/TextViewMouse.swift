@@ -15,11 +15,20 @@ extension LaTeXTextView {
     public override func keyDown(with event: NSEvent) {
         hover.dismiss()
         if completion.isVisible, completion.handleKeyDown(event) { return }
-        let flags = event.modifierFlags.intersection([.command, .control, .option, .shift])
-        if event.keyCode == 49, flags == .control {   // ⌃Space
+        if let trigger = configuration.completionTrigger, trigger.matches(event) {   // ⌃Space by default
             completion.trigger(manual: true)
             return
         }
+        // Tab completion is decided here — like the popup's own Tab above — before Vim and before the text input
+        // system, which may hold on to Tab (inline suggestions). When it declines, Tab goes on as before and
+        // `insertTab` does not ask again.
+        var declined = false
+        if event.keyCode == 48, KeyCombo.Modifiers(event.modifierFlags).isEmpty {
+            if completesWithTab(triggerPending: completion.isTriggerPending) { return }
+            declined = true
+        }
+        tabCompletionDeclined = declined
+        defer { tabCompletionDeclined = false }
         if let vim, !hasMarkedText() {
             if vim.handleKeyDown(event) { return }
         }

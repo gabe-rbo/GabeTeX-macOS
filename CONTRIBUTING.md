@@ -74,12 +74,13 @@ Notes:
 
 ```
 Sources/
-  TeXCore/            pure Swift: models, tokenizer, scanner, project index, linter, completion data
+  TeXCore/            pure Swift: models, tokenizer, scanner, project index, linters, statistics, completion data
   VimKit/             Vim emulation over a text-buffer protocol (no AppKit)
   TeXToolchain/       TeX detection, shadow workspace, latexmk, log parser, ChkTeX, tlmgr, SyncTeX
   EditorKit/          AppKit (TextKit 1) editor: highlighting, gutter, diagnostics, completion, Vim adapter
-  PreviewKit/         PDFKit viewer: reloads, highlights, sync clicks, zoom controls
-  GabeTeX/            the SwiftUI app: windows, workspace model, sidebar, tabs, Issues, Settings, Welcome
+  PreviewKit/         PDFKit viewer: reloads, highlights, sync clicks, zoom controls, presentation windows
+  GabeTeX/            the SwiftUI app: windows, workspace model, sidebar, tabs, Issues, Settings, Welcome,
+                      command registry + palette + shortcuts
   CheckKit/           the assertion harness
   TeXCoreChecks/ VimKitChecks/ EditorKitChecks/ TeXToolchainChecks/   the check executables
 Resources/
@@ -128,6 +129,12 @@ them. That means:
 - Put interpolation inside the localized string (`String(localized: "Installed \(name)")`); never concatenate
   fragments. Do not localize TeX or tool output, or Vim mode names.
 - If your Portuguese is shaky, say so in the pull request and the maintainer will help.
+
+**Commands go through the registry.** Every user-invokable action (a menu item, an editor action, a Touch Bar
+action) is an entry in the app's `CommandRegistry`, with a stable id, a title, a category and a default shortcut. The
+menus, the Command Palette (⇧⌘P) and **Settings › Shortcuts** are all generated from it, so a command added there
+shows up everywhere and is automatically rebindable. Don't hard-code a `.keyboardShortcut` on a one-off menu item:
+register a command instead, and pick a default shortcut that does not collide with the existing ones.
 
 **Correctness over convenience.**
 - Lines and columns are **1-based**; columns and ranges are **UTF-16** (`NSString`) units. Handle composed
@@ -178,6 +185,7 @@ Before you open a pull request:
       `TeXToolchainChecks` (`--unit` if you have no MacTeX).
 - [ ] New or changed behaviour is covered by a check.
 - [ ] New user-facing strings are in English **and** in `Resources/pt-BR.lproj/Localizable.strings`.
+- [ ] New actions are registered in the `CommandRegistry` (so they appear in the Command Palette and can be rebound).
 - [ ] No third-party dependencies, no `@State` / `@Entry` / `#Preview`, no use of `textLayoutManager`.
 - [ ] The UI looks right in Light and Dark mode and works with the keyboard (and with Reduce Motion, if you added
       animation).

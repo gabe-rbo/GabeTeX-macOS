@@ -1,229 +1,232 @@
 import SwiftUI
+import EditorKit
 import TeXToolchain
 
-/// The menu bar. Actions go to the key project window’s workspace (`@FocusedValue`); titles, enabled
-/// states and checkmarks come from its `CommandState` snapshot, which is also a focused value.
+/// The menu bar, bound to the command registry: every item's title, enabled state, checkmark, action and
+/// keyboard shortcut come from `CommandRegistry` and `ShortcutStore`, so shortcuts changed in Settings ›
+/// Shortcuts show and work here at once.
+///
+/// Actions go to the key project window’s workspace (`@FocusedValue`); titles, enabled states and checkmarks come
+/// from its `CommandState` snapshot, which is also a focused value. This struct only decides the menu layout.
 struct AppCommands: Commands {
     @FocusedValue(\.workspace) private var workspace
     @FocusedValue(\.commandState) private var focusedState
     @Environment(\.openWindow) private var openWindow
-    private let router = AppRouter.shared
+    @Environment(\.openSettings) private var openSettings
+    /// The stored shortcuts: changing one rewrites this key, which rebuilds the menus.
+    @AppStorage(ShortcutStore.defaultsKey) private var storedShortcuts = ""
+    private let registry = CommandRegistry.shared
+    private let shortcuts = ShortcutStore.shared
 
     private var state: CommandState { focusedState ?? .none }
 
-    /// ⌘W closes the current tab, but only in a project window that has one (never in the PDF window).
-    private var closesTab: Bool { state.hasCurrentFile && !state.isPDFWindowKey }
-
-    /// Runs `action` on the key window’s workspace. Anything that shows the editor or a dialog lives in the
-    /// project window, so when the detached PDF window is key that window comes forward first.
-    private func inProject(_ action: (ProjectWorkspace) -> Void) {
-        guard let workspace else { return }
-        if state.isPDFWindowKey { workspace.bringWindowToFront() }
-        action(workspace)
+    /// The context every item acts in. Also hands SwiftUI's window actions to the command palette.
+    private var context: CommandContext {
+        CommandEnvironment.openWindow = openWindow
+        CommandEnvironment.openSettings = openSettings
+        return CommandContext(workspace: workspace, state: state, openWindow: openWindow, openSettings: openSettings)
     }
+
+    // MARK: Items
+
+    /// A menu item for a registry command. `title` overrides the command's title (submenus show short ones);
+    /// `shortcutOf` borrows another command's shortcut (⌘W closes the window when there is no tab).
+    @ViewBuilder
+    private func item(_ id: CommandID, title: String? = nil, shortcutOf shortcutID: CommandID? = nil) -> some View {
+        if let command = registry[id] {
+            let context = self.context
+            Button(title ?? command.title(in: context)) { command.perform(context) }
+                .keyboardShortcut(shortcuts.keyboardShortcut(for: shortcutID ?? id))
+                .disabled(!command.isEnabled(context))
+        }
+    }
+
+    /// A menu item with a checkmark (`AppCommand.isOn`).
+    @ViewBuilder
+    private func toggle(_ id: CommandID, title: String? = nil) -> some View {
+        if let command = registry[id] {
+            let context = self.context
+            Toggle(title ?? command.title(in: context), isOn: Binding(
+                get: { command.isOn?(context) ?? false },
+                set: { _ in command.perform(context) }
+            ))
+            .keyboardShortcut(shortcuts.keyboardShortcut(for: id))
+            .disabled(!command.isEnabled(context))
+        }
+    }
+
+    // MARK: Menus
 
     var body: some Commands {
         SidebarCommands()
+
+        // GabeTeX ▸ Keyboard Shortcuts… (right after Settings…)
+        CommandGroup(after: .appSettings) {
+            item(.keyboardShortcuts)
+        }
 
         // File. One group, in the placement that is known to render in this WindowGroup app (`.newItem`):
         // `.saveItem` shows nothing on macOS 27, and its Close / Save items never appeared.
         CommandGroup(replacing: .newItem) {
             Group {
-                Button("New Project…") { openWindow(id: "new-project") }
-                    .keyboardShortcut("n", modifiers: [.command, .shift])
-                Button("New File…") { inProject { $0.promptNewFile() } }
-                    .keyboardShortcut("n")
-                    .disabled(workspace == nil)
+                item(.newProject)
+                item(.newFile)
                 Divider()
-                Button("Open Folder…") { router.chooseFolderAndOpen() }
-                    .keyboardShortcut("o")
-                Button("Open File…") { router.chooseFileAndOpen() }
-                    .keyboardShortcut("o", modifiers: [.command, .option])
+                item(.openFolder)
+                item(.openFile)
                 OpenRecentMenu()
             }
             Divider()
             // The one and only ⌘W: the current tab while there is one, else the window. In the PDF window it
             // closes that window (and so docks the preview again). The system's own Close is removed (see
-            // `SystemCloseItemRemover`).
+            // `SystemCloseItemRemover`, which recognises these two items by title). Both shortcuts are fixed.
             Group {
-                Button {
-                    if let workspace, closesTab {
-                        workspace.closeCurrentTab()
-                    } else {
-                        NSApp.keyWindow?.performClose(nil)
-                    }
-                } label: {
-                    if closesTab { Text("Close Tab") } else { Text("Close Window") }
-                }
-                .keyboardShortcut("w")
-                if closesTab {
-                    Button("Close Window") { NSApp.keyWindow?.performClose(nil) }
-                        .keyboardShortcut("w", modifiers: [.command, .shift])
+                if context.closesTab {
+                    item(.closeTab)
+                    item(.closeWindow)
+                } else {
+                    item(.closeWindow, shortcutOf: .closeTab)
                 }
             }
             Divider()
             Group {
-                Button("Save") { workspace?.saveCurrent() }
-                    .keyboardShortcut("s")
-                    .disabled(!state.hasCurrentFile)
-                Button("Save All") { workspace?.saveAll() }
-                    .keyboardShortcut("s", modifiers: [.command, .option])
-                    .disabled(workspace == nil)
+                item(.save)
+                item(.saveAll)
             }
             Divider()
             Group {
-                Button("Reveal in Finder") {
-                    if let url = workspace?.currentFile { workspace?.revealInFinder(url) }
-                }
-                .disabled(!state.hasCurrentFile)
-                ProjectLabelsMenu(workspace: workspace, bringsProjectForward: state.isPDFWindowKey)
+                item(.revealInFinder)
+                ProjectLabelsMenu(workspace: workspace, newLabel: registry[.newProjectLabel], context: context,
+                                  shortcut: shortcuts.keyboardShortcut(for: .newProjectLabel))
             }
         }
 
         // Edit
         CommandGroup(after: .pasteboard) {
             Divider()
-            Button("Find…") { inProject { $0.editor.showFind() } }
-                .keyboardShortcut("f")
-                .disabled(!state.hasCurrentFile)
-            Button("Find and Replace…") { inProject { $0.editor.showFind(replace: true) } }
-                .keyboardShortcut("f", modifiers: [.command, .option])
-                .disabled(!state.hasCurrentFile)
-            Button("Go to Line…") { inProject { $0.promptGoToLine() } }
-                .keyboardShortcut("l")
-                .disabled(!state.hasCurrentFile)
+            Group {
+                item(.find)
+                item(.findAndReplace)
+                item(.goToLine)
+            }
             Divider()
-            Button("Toggle Comment") { inProject { $0.editor.toggleComment() } }
-                .keyboardShortcut("/")
-                .disabled(!state.hasCurrentFile)
-            Button("Indent") { inProject { $0.editor.indentSelection() } }
-                .keyboardShortcut("]")
-                .disabled(!state.hasCurrentFile)
-            Button("Outdent") { inProject { $0.editor.outdentSelection() } }
-                .keyboardShortcut("[")
-                .disabled(!state.hasCurrentFile)
-            Button("Complete") { inProject { $0.editor.triggerCompletion() } }
-                .keyboardShortcut(.space, modifiers: .control)
-                .disabled(!state.hasCurrentFile)
+            Group {
+                item(.toggleComment)
+                item(.indent)
+                item(.outdent)
+                item(.complete)
+            }
+            Divider()
+            insertMenu
         }
 
         // View
         CommandGroup(after: .toolbar) {
             Divider()
-            Button {
-                workspace?.togglePreviewVisibility()
-            } label: {
-                if state.isPreviewDetached {
-                    Text("Show PDF Window")
-                } else if state.showPreview {
-                    Text("Hide PDF Preview")
-                } else {
-                    Text("Show PDF Preview")
-                }
+            Group {
+                item(.togglePreview)
+                item(.togglePDFWindow)
+                item(.toggleIssues)
+                item(.quickOpen)
+                item(.commandPalette)
             }
-            .keyboardShortcut("p", modifiers: [.command, .option])
-            .disabled(workspace == nil)
-            Button {
-                workspace?.togglePreviewDetached()
-            } label: {
-                if state.isPreviewDetached {
-                    Text("Attach PDF to Project Window")
-                } else {
-                    Text("Open PDF in Separate Window")
-                }
-            }
-            .disabled(workspace == nil)
-            Button {
-                withAnimation(.smooth) { workspace?.showIssues.toggle() }
-            } label: {
-                if state.showIssues { Text("Hide Issues") } else { Text("Show Issues") }
-            }
-            .keyboardShortcut("m", modifiers: [.command, .shift])
-            .disabled(workspace == nil)
-            Button("Quick Open…") { inProject { $0.isQuickOpenPresented = true } }
-                .keyboardShortcut("p")
-                .disabled(workspace == nil)
             Divider()
-            Button("Show Files") { inProject { $0.sidebarMode = .files } }
-                .keyboardShortcut("1", modifiers: [.command, .option])
-                .disabled(workspace == nil)
-            Button("Show Outline") { inProject { $0.sidebarMode = .outline } }
-                .keyboardShortcut("2", modifiers: [.command, .option])
-                .disabled(workspace == nil)
-            Divider()
-            Button("Show Next Tab") { workspace?.selectNextTab() }
-                .keyboardShortcut(.tab, modifiers: .control)
-                .disabled(state.tabCount < 2)
-            Button("Show Previous Tab") { workspace?.selectPreviousTab() }
-                .keyboardShortcut(.tab, modifiers: [.control, .shift])
-                .disabled(state.tabCount < 2)
-            Menu("Go to Tab") {
-                ForEach(1...9, id: \.self) { number in
-                    Button("Tab \(number)") { workspace?.selectTab(at: number - 1) }
-                        .keyboardShortcut(KeyEquivalent(Character("\(number)")), modifiers: .command)
-                        .disabled(state.tabCount < number)
-                }
+            Group {
+                item(.showFiles)
+                item(.showOutline)
             }
-            .disabled(workspace == nil)
+            Divider()
+            Group {
+                item(.documentStatistics)
+                item(.presentation)
+            }
+            Divider()
+            Group {
+                item(.nextTab)
+                item(.previousTab)
+                Menu("Go to Tab") {
+                    ForEach(1...9, id: \.self) { number in
+                        item(.tab(number), title: String(localized: "Tab \(number)"))
+                    }
+                }
+                .disabled(workspace == nil)
+            }
         }
 
         // Window
         CommandGroup(before: .windowList) {
-            Button("Welcome to GabeTeX") { openWindow(id: "welcome") }
+            item(.welcome)
             Divider()
         }
 
         // Build
         CommandMenu("Build") {
-            Button("Compile") { workspace?.compile() }
-                .keyboardShortcut("b")
-                .disabled(!state.canCompile)
-            Button("Stop") { workspace?.stopCompile() }
-                .keyboardShortcut(".")
-                .disabled(!state.isCompiling)
+            Group {
+                item(.compile)
+                item(.stop)
+            }
             Divider()
-            Toggle("Live Compile", isOn: Binding(
-                get: { state.liveCompile },
-                set: { AppSettings.shared.liveCompile = $0 }
-            ))
-            Menu("Engine") {
-                Picker("Engine", selection: Binding<TeXEngine?>(
-                    get: { state.engineOverride },
-                    set: { workspace?.setEngineOverride($0) }
-                )) {
-                    Text("Automatic (\(state.defaultEngine.displayName))").tag(TeXEngine?.none)
+            Group {
+                toggle(.liveCompile)
+                Menu("Engine") {
+                    toggle(.automaticEngine)
+                    Divider()
                     ForEach(TeXEngine.allCases) { engine in
-                        Text(engine.displayName).tag(TeXEngine?.some(engine))
+                        toggle(.engine(engine), title: engine.displayName)
                     }
                 }
-                .pickerStyle(.inline)
-                .labelsHidden()
+                .disabled(workspace == nil)
             }
-            .disabled(workspace == nil)
             Divider()
-            Button("Set as Main Document") {
-                if let workspace, let url = workspace.currentFile { workspace.setMainFile(url) }
+            Group {
+                item(.setMainDocument)
+                item(.automaticMainDocument)
+                item(.cleanAuxiliaryFiles)
             }
-            .disabled(!state.hasCurrentFile)
-            Button("Use Automatic Main Document") { workspace?.setMainFile(nil) }
-                .disabled(!state.hasMainOverride)
-            Button("Clean Auxiliary Files") { workspace?.cleanAuxiliaryFiles() }
-                .keyboardShortcut("k", modifiers: [.command, .shift])
-                .disabled(workspace == nil)
             Divider()
-            Button("Show in PDF") { workspace?.forwardSearch() }
-                .keyboardShortcut("j", modifiers: [.command, .shift])
-                .disabled(!state.hasCurrentFile)
-            Button("Show PDF in Finder") { workspace?.revealPDF() }
-                .disabled(!state.hasPDF)
+            Group {
+                item(.showInPDF)
+                item(.revealPDF)
+            }
             Divider()
-            Button("Next Issue") { inProject { $0.goToNextIssue(forward: true) } }
-                .keyboardShortcut("'")
-                .disabled(workspace == nil)
-            Button("Previous Issue") { inProject { $0.goToNextIssue(forward: false) } }
-                .keyboardShortcut("'", modifiers: [.command, .shift])
-                .disabled(workspace == nil)
+            Group {
+                item(.nextIssue)
+                item(.previousIssue)
+            }
         }
+    }
+
+    /// Edit ▸ Insert: the LaTeX markup actions of the Touch Bar (no default shortcuts; assign them in Settings).
+    private var insertMenu: some View {
+        Menu(String(localized: "Insert")) {
+            Group {
+                item(.inlineMath)
+                Menu(String(localized: "Display Math")) {
+                    ForEach(LaTeXMarkupAction.DisplayMath.allCases, id: \.self) { kind in
+                        item(.displayMath(kind), title: kind.label)
+                    }
+                }
+                item(.fraction)
+                item(.superscript)
+                item(.subscript)
+            }
+            Divider()
+            ForEach(LaTeXMarkupAction.TextStyle.allCases, id: \.self) { style in
+                item(.textStyle(style))
+            }
+            Divider()
+            Menu(String(localized: "Environments")) {
+                ForEach(EditorTouchBar.environments, id: \.self) { name in
+                    item(.environment(name), title: name)
+                }
+            }
+            Menu(String(localized: "Sections")) {
+                ForEach(EditorTouchBar.sections, id: \.self) { name in
+                    item(.section(name), title: "\\" + name)
+                }
+            }
+        }
+        .disabled(!state.hasCurrentFile)
     }
 }
 
@@ -245,18 +248,26 @@ private struct OpenRecentMenu: View {
     }
 }
 
-/// File ▸ Project Labels: toggles the labels of the key window’s project; “New Label…” creates one and gives it
-/// to the project. A view of its own, so the list follows `ProjectLabelStore` through ordinary observation.
+/// File ▸ Project Labels: toggles the labels of the key window’s project; “New Label…” (the registry's
+/// `newProjectLabel` command, with its shortcut) creates one and gives it to the project. A view of its own, so
+/// the list follows `ProjectLabelStore` through ordinary observation.
 private struct ProjectLabelsMenu: View {
     let workspace: ProjectWorkspace?
-    let bringsProjectForward: Bool
+    let newLabel: AppCommand?
+    let context: CommandContext
+    let shortcut: KeyboardShortcut?
+    private let store = ProjectLabelStore.shared
 
     var body: some View {
         Menu("Project Labels") {
             if let workspace {
-                LabelsMenuContent(project: workspace.folderURL) {
-                    if bringsProjectForward { workspace.bringWindowToFront() }
-                    workspace.labelEditor = LabelEditorRequest(mode: .create(assignTo: workspace.folderURL))
+                ForEach(store.labels) { label in
+                    LabelToggle(label: label, project: workspace.folderURL)
+                }
+                if !store.labels.isEmpty { Divider() }
+                if let newLabel {
+                    Button(String(localized: "New Label…")) { newLabel.perform(context) }
+                        .keyboardShortcut(shortcut)
                 }
             }
         }

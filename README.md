@@ -65,25 +65,42 @@ wanted an editor that treats that as the normal case. It has three goals:
   copy of the project. Your files are not touched until you save. See [how it works](#how-live-compilation-works).
 - Errors and warnings from the TeX log and from ChkTeX are underlined at the right line of the right file,
   including inside section files, and collected in an Issues panel.
+- **Live reference and citation warnings**: a `\ref` to a label that does not exist, a label defined more than
+  once, or a `\cite` key that is missing from your bibliography is underlined as you type, across all the files of
+  the project. (Citation checks wait until the project has a bibliography, and projects that use `xr` skip the
+  reference checks.)
 - Missing package? GabeTeX offers to install it with `tlmgr` (asking for the administrator password when the
   distribution needs it).
 - ⌘B saves and exports the PDF next to `main.tex`; ⇧⌘K cleans auxiliary files.
 
 ### PDF preview and sync
 - Built-in PDF preview (PDFKit) with SyncTeX that keeps your page and zoom across reloads.
-- **Precise two-way sync** *(new in 1.1)*: double-click a word in the PDF to land on that exact word in the
-  source (or switch to ⌘-click in Settings); ⌘-click text in the editor, or use **Show in PDF** (⇧⌘J), to land
-  on that exact word in the PDF. The destination is briefly highlighted. An optional **Follow cursor in PDF**
-  setting keeps the PDF in step as you move the caret.
-- **Detachable PDF** *(new in 1.1)*: pop the preview out into its own window for a second display or full
-  screen, and re-dock it any time. Reloads, sync and the build shortcuts all keep working.
+- **Precise two-way sync**: double-click a word in the PDF to land on that exact word in the source (or switch to
+  ⌘-click in Settings); ⌘-click text in the editor, or use **Show in PDF** (⇧⌘J), to land on that exact word in the
+  PDF. The destination is briefly highlighted. An optional **Follow cursor in PDF** setting keeps the PDF in step as
+  you move the caret.
+- **Detachable PDF**: pop the preview out into its own window for a second display or full screen, and re-dock it
+  any time. Reloads, sync and the build shortcuts all keep working.
 
 <p align="center">
   <img src="docs/assets/screenshots/sync.png" width="800" alt="Jumping between the PDF and the source: the target word is highlighted briefly">
 </p>
 
+### Presenting
+- **Presentation mode for Beamer** (⌥⌘↩, or the **Present** button in the toolbar of a Beamer document): the audience
+  gets the slides full screen on the external display, and you get a **presenter view** on your own screen with the
+  current and next slide, slide counter, timer, clock and notes. With one display, **P** toggles the presenter view.
+  Beamer's "notes on second screen" layout is split for you, black and white screens are a keystroke away, and live
+  reloads keep your slide. See the [presentation keys](#during-a-presentation).
+
 ### Writing
 - Autocomplete for commands, environments, `\ref` / `\cite` keys, file names and packages, with snippets.
+  **Tab completes** by default: press Tab after a partial command or inside `\ref{…}`, `\cite{…}` or `\begin{…}`;
+  ⌃Space always works too.
+- **Word and page count** in the status bar, and a **Document Statistics** popover with the words and pages of every
+  section (pages appear once the PDF is built); the outline sidebar shows each section's word count.
+- **Command Palette** (⇧⌘P) to find and run any command by name, and **editable keyboard shortcuts** in
+  **Settings › Shortcuts**.
 - Syntax highlighting, line numbers, auto-pairing, auto-closing of `\begin`…`\end`, comment toggling.
 - Optional **Vim mode**: normal, insert, visual and visual-line modes, operators and text objects (including
   `i$` / `a$` for math and `ie` / `ae` for environments), `:w :wa :q :make`, search and substitute. Dead keys on
@@ -91,17 +108,17 @@ wanted an editor that treats that as the normal case. It has three goals:
 - The interface is available in **English and Brazilian Portuguese** and follows the system language.
 
 ### Organizing projects
-- **Project labels** *(new in 1.1)* on the Welcome window: color labels, filter chips, search. Labeled projects
-  never fall off the recents list. Labels live in the app and never touch your project folders.
-
-### Touch Bar
-- **Touch Bar support** *(new in 1.1)* on Macs that have one: compile and stop, Show in PDF, shortcuts for math and
-  for sections and environments, scrubbers for Greek letters and math symbols, and page and zoom controls when the PDF
-  has focus. Customize it under **View › Customize Touch Bar…**.
+- **Project labels** on the Welcome window: color labels, filter chips, search. Labeled projects never fall off
+  the recents list. Labels live in the app and never touch your project folders.
 
 <p align="center">
   <img src="docs/assets/screenshots/welcome.png" width="640" alt="The Welcome window with recent projects and color labels">
 </p>
+
+### Touch Bar
+- **Touch Bar support** on Macs that have one: compile and stop, Show in PDF, shortcuts for math and for sections
+  and environments, scrubbers for Greek letters and math symbols, and page and zoom controls when the PDF has focus.
+  Customize it under **View › Customize Touch Bar…**.
 
 ## Requirements
 
@@ -152,7 +169,9 @@ If you would rather not trust a binary, read the code and [build it yourself](#b
 4. **Just write.** The PDF updates in the background as you type. Problems are underlined in the editor and
    listed in the Issues panel (⇧⌘M). Press **⌘B** to save everything and export the PDF next to `main.tex`.
 5. **Jump between source and PDF.** Double-click a word in the PDF, or ⌘-click text in the editor.
-6. **Try the sample.** The repository ships a small multi-file project in
+6. **Run anything from the keyboard.** Press **⇧⌘P** for the Command Palette, type a few letters of a command and
+   press Return. Every command shows its shortcut, and you can change any of them in **Settings › Shortcuts**.
+7. **Try the sample.** The repository ships a small multi-file project in
    [`Examples/Homologia`](Examples/Homologia) (`main.tex`, `sections/*.tex`, `refs.bib` and a `tikz-cd`
    diagram, written in Portuguese). Open that folder in GabeTeX to see live compilation, the outline and sync
    in action.
@@ -164,6 +183,8 @@ If you would rather not trust a binary, read the code and [build it yourself](#b
 | Compile (saves and exports the PDF next to `main.tex`) | ⌘B |
 | Stop compiling | ⌘. |
 | Quick Open: jump to any file in the project | ⌘P |
+| Command Palette: find and run any command | ⇧⌘P |
+| Start Presentation (Beamer, or any compiled PDF) | ⌥⌘↩ |
 | Source → PDF: **Show in PDF** (forward search) | ⇧⌘J |
 | Source → PDF: jump to the clicked word | ⌘-click text in the editor |
 | PDF → source: jump to the clicked word | Double-click a word in the PDF *(or ⌘-click, see Settings › General)* |
@@ -173,15 +194,32 @@ If you would rather not trust a binary, read the code and [build it yourself](#b
 | Files / Outline in the sidebar | ⌥⌘1 / ⌥⌘2 |
 | Toggle comment on the selected lines | ⌘/ |
 | Indent / outdent | ⌘] / ⌘[ |
-| Autocomplete | ⌃Space (or automatic after typing `\`) |
+| Autocomplete | Tab after a completable prefix *(on by default)* · ⌃Space · automatic after typing `\` |
 | Find · Find and Replace · Go to line | ⌘F · ⌥⌘F · ⌘L |
 | New project · Open folder · Open file | ⇧⌘N · ⌘O · ⌥⌘O |
 | New file · Save · Save all | ⌘N · ⌘S · ⌥⌘S |
 | Tabs: next / previous · jump to tab N | ⌃⇥ / ⌃⇧⇥ · ⌘1 … ⌘9 |
 | Clean auxiliary files | ⇧⌘K |
 
+**Every shortcut above can be changed** in **Settings › Shortcuts**, where you record a new key combination for any
+command, see conflicts before they happen, and restore the defaults. The autocomplete options (whether Tab completes,
+and which keys accept a suggestion) are in Settings too. The Command Palette lists every command with its current
+shortcut.
+
 The detached PDF window is under **View › Open PDF in Separate Window** (and **Attach PDF to Project Window** to
 dock it again). Vim mode is switched on in **Settings › Editor**.
+
+### During a presentation
+
+| Action | Keys |
+|---|---|
+| Next slide | → ↓ Space Page Down Return, or click |
+| Previous slide | ← ↑ Page Up Delete |
+| First / last slide | Home / End |
+| Go to slide N | type the number, then Return |
+| Black screen / white screen | B or . / W or , (press again to return) |
+| Show or hide the presenter view (one display) | P |
+| End the presentation | Esc |
 
 ## How live compilation works
 
@@ -281,12 +319,12 @@ A short tour; the full write-up is in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 | Module | What it does |
 |---|---|
-| `TeXCore` | Pure Swift: models, LaTeX tokenizer, project scanning (includes, outline, labels, bibliography), structural linter, autocomplete engine |
+| `TeXCore` | Pure Swift: models, LaTeX tokenizer, project scanning (includes, outline, labels, bibliography), structural and reference linters, word-count statistics, autocomplete engine |
 | `TeXToolchain` | TeX distribution detection, shadow-workspace compilation with `latexmk`, log parser, ChkTeX, `tlmgr`, SyncTeX |
-| `EditorKit` | The TextKit 1 editor: highlighting, gutter, diagnostics, completion popup, snippets, Vim adapter, reveal highlights |
+| `EditorKit` | The TextKit 1 editor: highlighting, gutter, diagnostics, completion popup and Tab completion, snippets, Vim adapter, reveal highlights |
 | `VimKit` | UI-independent Vim emulation |
-| `PreviewKit` | PDFKit viewer with position-preserving reloads, highlights and sync clicks |
-| `GabeTeX` | The SwiftUI app: windows, project workspace, sidebar, tabs, Quick Open, Issues, Settings, Welcome window |
+| `PreviewKit` | PDFKit viewer with position-preserving reloads, highlights and sync clicks, plus the presentation (audience and presenter) windows |
+| `GabeTeX` | The SwiftUI app: windows, project workspace, sidebar, tabs, Quick Open, Command Palette and shortcuts, Issues, Settings, Welcome window |
 | `CheckKit` + `*Checks` | The assertion harness and the check executables that replace XCTest |
 
 ## Contributing

@@ -30,5 +30,7 @@ await performanceChecks()
 await keyboardChecks()
 await touchBarChecks()
 await touchBarPDFChecks()
+await presentationChecks()
+await shortcutsAndCompletionChecks()
 
 Check.finish()

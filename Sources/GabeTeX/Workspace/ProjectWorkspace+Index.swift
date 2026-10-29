@@ -33,6 +33,9 @@ extension ProjectWorkspace {
     func refreshIndex() async {
         var overlays: [URL: String] = [:]
         for (url, buffer) in buffers where buffer.isDirty { overlays[url] = buffer.text }
+        // Edit counters at snapshot time: the reference warnings below are only applied to text that has not
+        // changed since (the index reads the unsaved text of dirty buffers, so it is live while typing).
+        let versions = buffers.mapValues { $0.changeCount }
         let input = IndexBuilder.Input(
             folder: folderURL,
             overrideRoot: mainFileOverride,
@@ -42,7 +45,12 @@ extension ProjectWorkspace {
             overlays: overlays,
             rootStatus: rootStatus
         )
-        let output = await Task.detached(priority: .utility) { IndexBuilder.compute(input) }.value
+        // The reference / citation lint is pure and takes a few milliseconds: it runs right behind the index,
+        // still off the main actor.
+        let (output, findings) = await Task.detached(priority: .utility) { () -> (IndexBuilder.Output, [ReferenceFinding]) in
+            let output = IndexBuilder.compute(input)
+            return (output, output.index.map { ReferenceLinter.findings(index: $0) } ?? [])
+        }.value
         if Task.isCancelled { return }
 
         rootStatus = output.rootStatus
@@ -54,9 +62,58 @@ extension ProjectWorkspace {
             let newSymbols = output.index?.symbols(projectFiles: output.projectFiles) ?? .empty
             if newSymbols != symbols { symbols = newSymbols }
         }
+        applyReferenceFindings(findings, overlays: Set(overlays.keys), versions: versions)
         if let previousRoot, let newRoot = output.root, previousRoot != newRoot {
             scheduleLiveCompile()
         }
+    }
+
+    // MARK: Reference & citation warnings
+
+    /// Stores the live reference / citation warnings computed from the index that was built for the snapshot
+    /// (`overlays` = the files whose unsaved text it read, `versions` = every open buffer's edit counter), and
+    /// refreshes the merged diagnostics. No root document (or no index) clears them. A result for text that has
+    /// changed since is dropped — the edit already scheduled a newer rebuild — so underlines never land on
+    /// stale positions.
+    func applyReferenceFindings(_ findings: [ReferenceFinding], overlays: Set<URL>, versions: [URL: Int]) {
+        for (url, buffer) in buffers where buffer.changeCount != (versions[url] ?? 0) { return }
+        referenceOverlayFiles = overlays
+        let diagnostics = projectSpelling(of: findings.map(\.diagnostic))
+        var shadows = Set<String>()
+        for (finding, diagnostic) in zip(findings, diagnostics) {
+            shadows.insert(Self.shadowKey(finding.kind, path: diagnostic.fileURL?.path, key: finding.key))
+        }
+        // Same place, same message → same id, so the editor keeps the underline and the Issues selection survives.
+        let previous = referenceDiagnostics
+        let updated = Self.reusingIDs(diagnostics, from: previous)
+        var changed = false
+        if !Self.sameDiagnostics(updated, previous) {
+            referenceDiagnostics = updated
+            changed = true
+        }
+        if shadows != referenceShadows {
+            referenceShadows = shadows
+            changed = true
+        }
+        if changed { rebuildDiagnostics() }
+    }
+
+    /// Identity of a problem the live warnings report: a duplicate label is global, a reference or citation
+    /// belongs to the file it is used in.
+    nonisolated static func shadowKey(_ kind: ReferenceFinding.Kind, path: String?, key: String) -> String {
+        switch kind {
+        case .duplicateLabel: "label\u{1F}\(key)"
+        case .undefinedReference: "ref\u{1F}\(path ?? "")\u{1F}\(key)"
+        case .missingCitation: "cite\u{1F}\(path ?? "")\u{1F}\(key)"
+        }
+    }
+
+    /// LaTeX's own “Reference `k' … undefined”, “Citation `k' … undefined” and “Label `k' multiply defined”
+    /// warning for a key the live warnings already report: showing both would list every problem twice.
+    private func isShadowedByReferenceWarning(_ diagnostic: Diagnostic) -> Bool {
+        guard diagnostic.source == .tex, diagnostic.severity == .warning,
+              let warning = ReferenceLinter.texWarning(diagnostic.message) else { return false }
+        return referenceShadows.contains(Self.shadowKey(warning.kind, path: diagnostic.fileURL?.path, key: warning.key))
     }
 
     // MARK: Structure lint (instant, in-process)
@@ -120,11 +177,19 @@ extension ProjectWorkspace {
 
     // MARK: Merged diagnostics
 
-    /// Diagnostics = compile ∪ chktex ∪ structure lint, errors first, then by file and line.
+    /// Diagnostics = compile ∪ chktex ∪ structure lint ∪ reference & citation warnings, errors first, then by
+    /// file and line.
     func rebuildDiagnostics() {
-        var all = compileDiagnostics
+        // A buffer whose unsaved text the index was built from was closed without saving (a save schedules its
+        // own rebuild): the index no longer matches the files, so rebuild it.
+        if referenceOverlayFiles.contains(where: { buffers[$0] == nil }) {
+            referenceOverlayFiles = []
+            scheduleIndexRefresh()
+        }
+        var all = referenceShadows.isEmpty ? compileDiagnostics : compileDiagnostics.filter { !isShadowedByReferenceWarning($0) }
         for list in chktexDiagnostics.values { all.append(contentsOf: list) }
         for list in structureDiagnostics.values { all.append(contentsOf: list) }
+        all.append(contentsOf: referenceDiagnostics)
         all.sort { a, b in
             if a.severity != b.severity { return a.severity > b.severity }
             let pathA = a.fileURL?.path ?? ""

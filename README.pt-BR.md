@@ -67,25 +67,44 @@ um editor que trate isso como o caso normal. Ele tem três objetivos:
   [como funciona](#como-a-compilação-ao-vivo-funciona).
 - Erros e avisos do log do TeX e do ChkTeX aparecem sublinhados na linha certa do arquivo certo, inclusive dentro
   dos arquivos de seção, e ficam reunidos no painel de Problemas.
+- **Avisos ao vivo de referências e citações**: um `\ref` para um rótulo que não existe, um rótulo definido mais de
+  uma vez ou uma chave de `\cite` ausente da sua bibliografia aparecem sublinhados enquanto você digita, em todos os
+  arquivos do projeto. (Os avisos de citação só aparecem quando o projeto tem uma bibliografia, e projetos que usam
+  `xr` não passam pela checagem de referências.)
 - Faltou um pacote? O GabeTeX oferece instalá-lo com o `tlmgr` (pedindo a senha de administrador quando a
   distribuição exigir).
 - ⌘B salva e exporta o PDF ao lado do `main.tex`; ⇧⌘K limpa os arquivos auxiliares.
 
 ### PDF e sincronização
 - Visualizador de PDF integrado (PDFKit) com SyncTeX, que mantém sua página e seu zoom a cada recarga.
-- **Sincronização precisa nos dois sentidos** *(novidade da 1.1)*: dê um duplo clique numa palavra do PDF para cair
-  exatamente nessa palavra no código (ou mude para ⌘-clique nos Ajustes); dê ⌘-clique num texto do editor, ou use
-  **Mostrar no PDF** (⇧⌘J), para cair exatamente nessa palavra no PDF. O destino é destacado brevemente. A opção
-  **Acompanhar o cursor no PDF** faz o PDF seguir, discretamente, o trecho que você está editando.
-- **PDF destacável** *(novidade da 1.1)*: tire a prévia para uma janela própria, para usar um segundo monitor ou a tela
-  cheia, e encaixe de volta quando quiser. Recargas, sincronização e atalhos de compilação continuam funcionando.
+- **Sincronização precisa nos dois sentidos**: dê um duplo clique numa palavra do PDF para cair exatamente nessa
+  palavra no código (ou mude para ⌘-clique nos Ajustes); dê ⌘-clique num texto do editor, ou use **Mostrar no PDF**
+  (⇧⌘J), para cair exatamente nessa palavra no PDF. O destino é destacado brevemente. A opção **Acompanhar o cursor
+  no PDF** faz o PDF seguir, discretamente, o trecho que você está editando.
+- **PDF destacável**: tire a prévia para uma janela própria, para usar um segundo monitor ou a tela cheia, e encaixe
+  de volta quando quiser. Recargas, sincronização e atalhos de compilação continuam funcionando.
 
 <p align="center">
   <img src="docs/assets/screenshots/sync.png" width="800" alt="Saltando entre o PDF e o código: a palavra de destino é destacada por um instante">
 </p>
 
+### Apresentações
+- **Modo apresentação para Beamer** (⌥⌘↩, ou o botão **Apresentar** na barra de ferramentas de um documento Beamer): a
+  plateia vê os slides em tela cheia no monitor externo, e você tem uma **visão do apresentador** na sua tela, com o
+  slide atual e o próximo, contador de slides, cronômetro, relógio e notas. Com um só monitor, a tecla **P** alterna
+  a visão do apresentador. O layout de “notas na segunda tela” do Beamer é dividido para você, telas preta e branca
+  ficam a uma tecla de distância e as recargas ao vivo mantêm o slide em que você está. Veja as
+  [teclas da apresentação](#durante-uma-apresentação).
+
 ### Escrita
 - Autocompletar para comandos, ambientes, chaves de `\ref` / `\cite`, nomes de arquivos e pacotes, com *snippets*.
+  **O Tab completa** por padrão: aperte Tab depois de um comando incompleto ou dentro de `\ref{…}`, `\cite{…}` ou
+  `\begin{…}`; o ⌃Espaço também sempre funciona.
+- **Contagem de palavras e páginas** na barra de status e um popover de **Estatísticas do Documento** com as palavras
+  e as páginas de cada seção (as páginas aparecem depois que o PDF é gerado); a barra lateral de Estrutura mostra a
+  contagem de palavras de cada seção.
+- **Paleta de Comandos** (⇧⌘P) para encontrar e executar qualquer comando pelo nome, e **atalhos de teclado
+  editáveis** em **Ajustes › Atalhos**.
 - Realce de sintaxe, números de linha, fechamento automático de pares, fechamento de `\begin`…`\end` e alternância de
   comentários.
 - **Modo Vim** opcional: modos normal, inserção, visual e visual de linha, operadores e objetos de texto (incluindo
@@ -94,17 +113,17 @@ um editor que trate isso como o caso normal. Ele tem três objetivos:
 - A interface está em **português (Brasil) e inglês** e segue o idioma do sistema.
 
 ### Organização de projetos
-- **Rótulos de projeto** *(novidade da 1.1)* na janela de boas-vindas: rótulos coloridos, filtros, busca. Projetos
-  com rótulo nunca saem da lista de recentes. Os rótulos ficam no app e nunca tocam nas pastas dos projetos.
+- **Rótulos de projeto** na janela de boas-vindas: rótulos coloridos, filtros, busca. Projetos com rótulo nunca saem
+  da lista de recentes. Os rótulos ficam no app e nunca tocam nas pastas dos projetos.
 
 <p align="center">
   <img src="docs/assets/screenshots/welcome.png" width="640" alt="Janela de boas-vindas com projetos recentes e rótulos coloridos">
 </p>
 
 ### Touch Bar
-- **Suporte à Touch Bar** *(novidade da 1.1)* nos Macs que a têm: compilar e parar, Mostrar no PDF, atalhos de
-  matemática e de seções e ambientes, seletores deslizantes de letras gregas e símbolos matemáticos, e controles de
-  página e zoom quando o PDF está em foco. Personalize em **Visualizar › Personalizar Touch Bar…**.
+- **Suporte à Touch Bar** nos Macs que a têm: compilar e parar, Mostrar no PDF, atalhos de matemática e de seções e
+  ambientes, seletores deslizantes de letras gregas e símbolos matemáticos, e controles de página e zoom quando o PDF
+  está em foco. Personalize em **Visualizar › Personalizar Touch Bar…**.
 
 ## Requisitos
 
@@ -155,7 +174,10 @@ Se preferir não confiar num binário, leia o código e [compile você mesmo](#c
 4. **Apenas escreva.** O PDF se atualiza em segundo plano enquanto você digita. Os problemas aparecem sublinhados no
    editor e listados no painel de Problemas (⇧⌘M). Use **⌘B** para salvar tudo e exportar o PDF ao lado do `main.tex`.
 5. **Salte entre código e PDF.** Dê um duplo clique numa palavra do PDF, ou ⌘-clique num texto do editor.
-6. **Experimente o exemplo.** O repositório traz um pequeno projeto de vários arquivos em
+6. **Execute qualquer coisa pelo teclado.** Aperte **⇧⌘P** para abrir a Paleta de Comandos, digite algumas letras de um
+   comando e aperte Return. Cada comando mostra o seu atalho, e você pode mudar qualquer um deles em **Ajustes ›
+   Atalhos**.
+7. **Experimente o exemplo.** O repositório traz um pequeno projeto de vários arquivos em
    [`Examples/Homologia`](Examples/Homologia) (`main.tex`, `sections/*.tex`, `refs.bib` e um diagrama `tikz-cd`).
    Abra essa pasta no GabeTeX para ver a compilação ao vivo, a estrutura e a sincronização em ação.
 
@@ -166,6 +188,8 @@ Se preferir não confiar num binário, leia o código e [compile você mesmo](#c
 | Compilar (salva e exporta o PDF ao lado do `main.tex`) | ⌘B |
 | Parar a compilação | ⌘. |
 | Quick Open: ir para qualquer arquivo do projeto | ⌘P |
+| Paleta de Comandos: encontrar e executar qualquer comando | ⇧⌘P |
+| Iniciar Apresentação (Beamer, ou qualquer PDF compilado) | ⌥⌘↩ |
 | Código → PDF: **Mostrar no PDF** (busca direta) | ⇧⌘J |
 | Código → PDF: ir para a palavra clicada | ⌘-clique no texto do editor |
 | PDF → código: ir para a palavra clicada | Duplo clique numa palavra do PDF *(ou ⌘-clique, veja Ajustes › Geral)* |
@@ -175,15 +199,32 @@ Se preferir não confiar num binário, leia o código e [compile você mesmo](#c
 | Arquivos / Estrutura na barra lateral | ⌥⌘1 / ⌥⌘2 |
 | Comentar/descomentar as linhas selecionadas | ⌘/ |
 | Aumentar / diminuir o recuo | ⌘] / ⌘[ |
-| Autocompletar | ⌃Espaço (ou automático ao digitar `\`) |
+| Autocompletar | Tab depois de um trecho completável *(ativado por padrão)* · ⌃Espaço · automático ao digitar `\` |
 | Buscar · Buscar e Substituir · Ir para a linha | ⌘F · ⌥⌘F · ⌘L |
 | Novo projeto · Abrir pasta · Abrir arquivo | ⇧⌘N · ⌘O · ⌥⌘O |
 | Novo arquivo · Salvar · Salvar tudo | ⌘N · ⌘S · ⌥⌘S |
 | Abas: próxima/anterior · aba N | ⌃⇥ / ⌃⇧⇥ · ⌘1 … ⌘9 |
 | Limpar arquivos auxiliares | ⇧⌘K |
 
+**Todos os atalhos acima podem ser mudados** em **Ajustes › Atalhos**, onde você grava uma nova combinação de teclas
+para qualquer comando, vê os conflitos antes que aconteçam e restaura os padrões. As opções de autocompletar (se o Tab
+completa e quais teclas aceitam uma sugestão) também ficam nos Ajustes. A Paleta de Comandos lista cada comando com o
+atalho atual dele.
+
 A janela de PDF destacada fica em **Visualizar › Abrir PDF em Janela Separada** (e **Anexar PDF à Janela do
 Projeto** para encaixá-lo de volta). O modo Vim é ativado em **Ajustes › Editor**.
+
+### Durante uma apresentação
+
+| Ação | Teclas |
+|---|---|
+| Próximo slide | → ↓ Espaço Page Down Return, ou clique |
+| Slide anterior | ← ↑ Page Up Delete |
+| Primeiro / último slide | Home / End |
+| Ir para o slide N | digite o número e aperte Return |
+| Tela preta / tela branca | B ou . / W ou , (aperte de novo para voltar) |
+| Mostrar ou ocultar a visão do apresentador (um só monitor) | P |
+| Encerrar a apresentação | Esc |
 
 ## Como a compilação ao vivo funciona
 
@@ -283,12 +324,12 @@ Um resumo; o texto completo está em [ARCHITECTURE.md](ARCHITECTURE.md) (em ingl
 
 | Módulo | Função |
 |---|---|
-| `TeXCore` | Swift puro: modelos, tokenizer LaTeX, varredura de projeto (includes, estrutura, rótulos, bibliografia), linter estrutural, motor de autocompletar |
+| `TeXCore` | Swift puro: modelos, tokenizer LaTeX, varredura de projeto (includes, estrutura, rótulos, bibliografia), linters estrutural e de referências, estatísticas de palavras, motor de autocompletar |
 | `TeXToolchain` | Detecção da distribuição TeX, compilação em *shadow workspace* com `latexmk`, parser de log, ChkTeX, `tlmgr`, SyncTeX |
-| `EditorKit` | O editor em TextKit 1: realce, gutter, diagnósticos, popup de completação, snippets, adaptador Vim, destaque ao saltar |
+| `EditorKit` | O editor em TextKit 1: realce, gutter, diagnósticos, popup de completação e completação com Tab, snippets, adaptador Vim, destaque ao saltar |
 | `VimKit` | Emulação do Vim independente de UI |
-| `PreviewKit` | Visualizador PDFKit com recargas que preservam a posição, destaques e cliques de sincronização |
-| `GabeTeX` | O app SwiftUI: janelas, workspace do projeto, barra lateral, abas, Quick Open, Problemas, Ajustes, janela de boas-vindas |
+| `PreviewKit` | Visualizador PDFKit com recargas que preservam a posição, destaques e cliques de sincronização, além das janelas de apresentação (plateia e apresentador) |
+| `GabeTeX` | O app SwiftUI: janelas, workspace do projeto, barra lateral, abas, Quick Open, Paleta de Comandos e atalhos, Problemas, Ajustes, janela de boas-vindas |
 | `CheckKit` + `*Checks` | O *harness* de asserções e os executáveis de checagem que substituem o XCTest |
 
 ## Como contribuir

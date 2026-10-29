@@ -172,6 +172,30 @@ final class ProjectWorkspace {
     var alert: WorkspaceAlert?
     var statusMessage: String?
 
+    // MARK: 1.0 feature state — one block per feature owner (see claude/SPEC-1.0.md); edit only your block.
+
+    // MARK: [refs] Reference & citation warnings
+    @ObservationIgnored var referenceDiagnostics: [Diagnostic] = []
+    /// What the live warnings in `referenceDiagnostics` are about (`ReferenceLinter`), used to hide LaTeX's own
+    /// “undefined / multiply defined” warnings for the same key while the live one is shown.
+    @ObservationIgnored var referenceShadows: Set<String> = []
+    /// Files whose unsaved text the last applied index was built from; closing one discards its text.
+    @ObservationIgnored var referenceOverlayFiles: Set<URL> = []
+
+    // MARK: [stats] Word & page counts
+    /// Word, formula and page counts for the status bar, the statistics popover and the outline; see `+Statistics.swift`.
+    @ObservationIgnored let statistics = StatisticsModel()
+
+    // MARK: [present] Presentation mode
+    /// The running presentation (audience + presenter windows), nil when not presenting.
+    var presentation: PresentationController?
+    /// What the root's preamble says about presenting (Beamer class, notes side); see `+Presentation.swift`.
+    var presentationSource = PresentationSourceInfo()
+    @ObservationIgnored var presentationTracking = PresentationTracking()
+
+    // MARK: [commands] Command palette
+    var isCommandPalettePresented = false
+
     @ObservationIgnored weak var window: NSWindow?
     /// The detached PDF window, while it is open.
     @ObservationIgnored weak var pdfWindow: NSWindow?

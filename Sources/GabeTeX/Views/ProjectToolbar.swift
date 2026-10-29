@@ -1,16 +1,25 @@
 import SwiftUI
 import TeXToolchain
 
-/// Compile · Stop │ Engine · Live │ Preview · Issues
+/// Compile · Stop │ Present (Beamer only) │ Engine · Live │ Preview · Issues
 ///
 /// Every item is a small view of its own that reads the workspace from the environment, so each button
 /// follows exactly the state it shows (compiling spinner, enabled state, toggles).
 struct ProjectToolbar: ToolbarContent {
+    @Environment(ProjectWorkspace.self) private var workspace
+
     var body: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) { CompileButton() }
         ToolbarItem(placement: .primaryAction) { StopButton() }
 
         ToolbarSpacer(.fixed, placement: .primaryAction)
+
+        // Only for slide documents (`\documentclass{beamer}` in the root); View/Build ▸ Start Presentation works
+        // for any PDF.
+        if workspace.isPresentationDocument {
+            ToolbarItem(placement: .primaryAction) { PresentButton() }
+            ToolbarSpacer(.fixed, placement: .primaryAction)
+        }
 
         ToolbarItem(placement: .primaryAction) { EngineMenu() }
         ToolbarItem(placement: .primaryAction) { LiveCompileToggle() }
@@ -20,6 +29,39 @@ struct ProjectToolbar: ToolbarContent {
         ToolbarItem(placement: .primaryAction) { PreviewToggle() }
         ToolbarItem(placement: .primaryAction) { DetachPreviewToggle() }
         ToolbarItem(placement: .primaryAction) { IssuesToggle() }
+    }
+}
+
+/// Present (split button): click presents from the first slide; the menu also offers the current slide.
+private struct PresentButton: View {
+    @Environment(ProjectWorkspace.self) private var workspace
+
+    var body: some View {
+        Menu {
+            Button {
+                workspace.startPresentation()
+            } label: {
+                Label("Present from Beginning", systemImage: "play.rectangle")
+            }
+            Button {
+                workspace.startPresentationFromCurrentPage()
+            } label: {
+                Label("Present from Current Slide", systemImage: "play.rectangle.on.rectangle")
+            }
+        } label: {
+            Label("Present", systemImage: "play.rectangle.fill")
+        } primaryAction: {
+            workspace.togglePresentation()
+        }
+        .disabled(!workspace.canPresent && !workspace.isPresenting)
+        .help(helpText)
+        .accessibilityLabel(workspace.isPresenting ? Text("End Presentation") : Text("Present"))
+    }
+
+    private var helpText: Text {
+        if workspace.isPresenting { return Text("End Presentation") }
+        if workspace.canPresent { return Text("Present the slides full screen (⌥⌘↩)") }
+        return Text("Compile the document to present it")
     }
 }
 
@@ -40,6 +82,8 @@ private struct CompileButton: View {
         .disabled(workspace.mainFile == nil)
         .help("Compile the document (⌘B)")
         .accessibilityLabel("Compile")
+        // Watches the root's document class, so the Present button can appear for Beamer documents.
+        .task { workspace.trackPresentationSource() }
     }
 }
 
