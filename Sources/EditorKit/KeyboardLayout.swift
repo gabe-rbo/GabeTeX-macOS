@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import Synchronization
 
 /// Turns key codes into the characters they type under a keyboard layout **without dead-key
 /// composition**.
@@ -131,8 +132,14 @@ public nonisolated struct KeyboardLayoutTranslator: Sendable {
 
 extension KeyboardLayoutTranslator {
     /// Test hook: the layout `deadKeyCharacters(for:)` uses instead of the current keyboard layout (switching
-    /// the real input source would change the user's system).
-    static var layoutOverride: KeyboardLayoutTranslator?
+    /// the real input source would change the user's system). Backed by a `Mutex` so it is concurrency-safe
+    /// under every compiler's isolation inference (a plain mutable static is not).
+    nonisolated static var layoutOverride: KeyboardLayoutTranslator? {
+        get { layoutOverrideStorage.withLock { $0 } }
+        set { layoutOverrideStorage.withLock { $0 = newValue } }
+    }
+
+    private nonisolated static let layoutOverrideStorage = Mutex<KeyboardLayoutTranslator?>(nil)
 
     /// The character a key event stands for when `NSEvent.characters` came back empty (a dead key such as
     /// ABNT2 `~` or US-International `'`), resolved through the current layout. Nil when the key has no
